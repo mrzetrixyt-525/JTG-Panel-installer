@@ -33,7 +33,7 @@ spinner() {
     local pid=$1
     local delay=0.08
     local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+    while kill -0 "$pid" 2>/dev/null; do
         local temp=${spinstr#?}
         printf " ${CYAN}%c${NC}  " "$spinstr"
         local spinstr=$temp${spinstr%"$temp"}
@@ -53,18 +53,32 @@ get_sys_info() {
     else
         OS_NAME="Linux"
     fi
+    [ -z "$OS_NAME" ] && OS_NAME="Unknown"
 
     # Uptime
-    UPTIME_VAL=$(uptime -p 2>/dev/null | sed 's/up //' || echo "N/A")
+    UPTIME_VAL=$(uptime -p 2>/dev/null | sed 's/up //')
+    [ -z "$UPTIME_VAL" ] && UPTIME_VAL="N/A"
 
     # PM2 & Panel Status
     if command -v pm2 &> /dev/null; then
         PM2_VAL="${GREEN}Online${NC}"
-        # Strictly check if ecosystem.config.cjs or JTP-Panel is running and online
-        if pm2 jlist 2>/dev/null | grep -q '\"pm2_env\":{\"status\":\"online\"' && pm2 list 2>/dev/null | grep -qE "Jtg|ecosystem|JTP-Panel"; then
+
+        # Robust status check: ask PM2 directly for the named process's
+        # status field instead of grepping raw JSON formatting, which
+        # breaks across PM2 versions that pretty-print differently.
+        local pm2_status
+        pm2_status=$(pm2 jlist 2>/dev/null | tr -d '\n\t ' | \
+            grep -oE '"name":"(Jtg|JTP-Panel|ecosystem)"[^}]*"status":"[a-z]+"' | \
+            grep -oE '"status":"[a-z]+"' | \
+            head -n1 | \
+            cut -d'"' -f4)
+
+        if [ "$pm2_status" = "online" ]; then
             PANEL_VAL="${GREEN}● Running${NC}"
-        else
+        elif [ -n "$pm2_status" ]; then
             PANEL_VAL="${RED}● Stopped${NC}"
+        else
+            PANEL_VAL="${GRAY}● Not Installed${NC}"
         fi
     else
         PM2_VAL="${RED}Offline${NC}"
@@ -73,7 +87,7 @@ get_sys_info() {
 
     # Cloudflare Status
     if command -v cloudflared &> /dev/null; then
-        if systemctl is-active --quiet cloudflared 2>/dev/null || pgrep -x "cloudflared" > /dev/null; then
+        if systemctl is-active --quiet cloudflared 2>/dev/null || pgrep -x "cloudflared" > /dev/null 2>&1; then
             CF_VAL="${GREEN}● Active${NC}"
         else
             CF_VAL="${YELLOW}● Installed (Offline)${NC}"
@@ -144,21 +158,24 @@ install_panel() {
     echo -e "${CYAN}╭────────────────────────────────────────╮${NC}"
     echo -e "${CYAN}│           ${BOLD}${WHITE}JTP INSTALLATION${NC}${CYAN}             │${NC}"
     echo -e "${CYAN}╰────────────────────────────────────────╯${NC}\n"
-    
+
     if [ -d "$PANEL_DIR" ]; then
-        cd "$PANEL_DIR" || return
+        cd "$PANEL_DIR" || { echo -e "${RED}[Error] Could not enter panel directory!${NC}"; sleep 2; return; }
         echo -ne " ${CYAN}➔${NC} Pulling latest updates... "
         (git stash &>/dev/null && git pull &>/dev/null) & spinner $!
+        wait
         echo -e "[${GREEN}✓${NC}]"
     else
         echo -ne " ${CYAN}➔${NC} Cloning core repository... "
         git clone "$GIT_REPO" "$PANEL_DIR" &>/dev/null & spinner $!
-        cd "$PANEL_DIR" || return
+        wait
+        cd "$PANEL_DIR" || { echo -e "\n${RED}[Error] Clone failed!${NC}"; sleep 2; return; }
         echo -e "[${GREEN}✓${NC}]"
     fi
-    
+
     echo -ne " ${CYAN}➔${NC} Installing NPM dependencies... "
     npm install &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]\n"
 
     echo -e " ${YELLOW}➔ Admin Setup Required:${NC}"
@@ -168,6 +185,7 @@ install_panel() {
 
     echo -ne " ${CYAN}➔${NC} Building Panel Assets... "
     npm run build &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
 
     echo -ne " ${CYAN}➔${NC} Booting Panel... "
@@ -193,7 +211,7 @@ uninstall_panel() {
     echo -e "${RED}╭────────────────────────────────────────╮${NC}"
     echo -e "${RED}│            ${BOLD}${WHITE}SYSTEM PURGE${NC}${RED}                │${NC}"
     echo -e "${RED}╰────────────────────────────────────────╯${NC}\n"
-    
+
     echo -ne " ${YELLOW}⚠ Are you absolutely sure? [Y/N]: ${NC}"
     read -r confirm
 
@@ -204,7 +222,7 @@ uninstall_panel() {
             pm2 save --force &>/dev/null
         fi
         echo -e "[${GREEN}✓${NC}]"
-        
+
         echo -ne " ${CYAN}➔${NC} Deleting panel data... "
         rm -rf "$PANEL_DIR"
         echo -e "[${GREEN}✓${NC}]"
@@ -227,22 +245,27 @@ run_setup_1() {
 
     echo -ne " ${CYAN}➔${NC} Updating APT repositories... "
     sudo apt-get update -y &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
 
     echo -ne " ${CYAN}➔${NC} Upgrading system packages... "
     sudo apt-get upgrade -y &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
 
     echo -ne " ${CYAN}➔${NC} Installing Git & Curl... "
     sudo apt-get install -y git curl &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
 
     echo -ne " ${CYAN}➔${NC} Installing Node.js 20.x... "
     (curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - &>/dev/null && sudo apt-get install -y nodejs &>/dev/null) & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
 
     echo -ne " ${CYAN}➔${NC} Installing Global PM2... "
     sudo npm install -g pm2 &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]\n"
 
     echo -e " ${GREEN}Environment Prep Complete.${NC}"
@@ -280,10 +303,12 @@ run_setup_2() {
 
     echo -ne " ${CYAN}➔${NC} Reinstalling clean dependencies... "
     npm install &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
 
     echo -ne " ${CYAN}➔${NC} Rebuilding Panel... "
     npm run build &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
 
     echo -ne " ${CYAN}➔${NC} Restarting Panel Service... "
@@ -312,7 +337,7 @@ panel_system_menu() {
         echo -e "  ${YELLOW}2${NC} | Restart Panel"
         echo -e "  ${RED}3${NC} | Stop Panel"
         echo -e "  ${GRAY}0${NC} | Back to Main Menu\n"
-        
+
         echo -ne " ${CYAN}➔${NC} Select: "
         read -r sys_opt
 
@@ -356,7 +381,7 @@ cloudflare_zone() {
         echo -e "  ${YELLOW}2${NC} | Setup & Connect Cloudflare Tunnel (Token)"
         echo -e "  ${RED}3${NC} | Uninstall Cloudflared"
         echo -e "  ${GRAY}0${NC} | Back to Main Menu\n"
-        
+
         echo -ne " ${CYAN}➔${NC} Select: "
         read -r cf_opt
 
@@ -364,6 +389,7 @@ cloudflare_zone() {
             1)
                 echo -ne "\n ${CYAN}➔${NC} Installing Cloudflare... "
                 (sudo mkdir -p /etc/apt/keyrings && curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /etc/apt/keyrings/cloudflare-main.gpg >/dev/null && echo "deb [signed-by=/etc/apt/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared jammy main" | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null && sudo apt-get update -y &>/dev/null && sudo apt-get install -y cloudflared &>/dev/null) & spinner $!
+                wait
                 echo -e "[${GREEN}✓${NC}]"
                 sleep 1
                 ;;
@@ -379,12 +405,13 @@ cloudflare_zone() {
 
                 if [ -z "$cf_token" ]; then
                     echo -e "\n ${RED}Token cannot be empty!${NC}"
-                    sleep 15
+                    sleep 2
                     continue
                 fi
 
                 echo -ne "\n ${CYAN}➔${NC} Installing cloudflare tunnel service... "
                 sudo cloudflared service install "$cf_token" &>/dev/null & spinner $!
+                wait
                 echo -e "[${GREEN}✓${NC}]"
 
                 echo -ne " ${CYAN}➔${NC} Starting cloudflared service... "
@@ -401,6 +428,7 @@ cloudflare_zone() {
                 sudo systemctl stop cloudflared &>/dev/null
                 sudo cloudflared service uninstall &>/dev/null
                 sudo apt-get remove --purge -y cloudflared &>/dev/null & spinner $!
+                wait
                 echo -e "[${GREEN}✓${NC}]"
                 sleep 1
                 ;;
@@ -418,20 +446,23 @@ update_manual() {
     if [ ! -d "$PANEL_DIR" ]; then
         echo -e " ${RED}JTP Panel not found!${NC}"; sleep 1; return
     fi
-    
+
     cd "$PANEL_DIR" || return
     echo -ne " ${CYAN}➔${NC} Syncing Repository... "
     (git stash &>/dev/null && git pull &>/dev/null) & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
-    
+
     echo -ne " ${CYAN}➔${NC} Rebuilding System... "
     (npm install &>/dev/null && npm run build &>/dev/null) & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]"
-    
+
     echo -ne " ${CYAN}➔${NC} Rebooting Panel... "
     pm2 restart all &>/dev/null & spinner $!
+    wait
     echo -e "[${GREEN}✓${NC}]\n"
-    
+
     echo -e " ${GREEN}Update Complete!${NC}"
     sleep 1
     cd .. 2>/dev/null || true
@@ -457,316 +488,5 @@ while true; do
         b|B) run_setup_2 ;;
         0) echo -e "\n ${GREEN}System shutdown gracefully. Goodbye!${NC}\n"; exit 0 ;;
         *) echo -e " ${RED}Command unrecognized.${NC}"; sleep 1 ;;
-    esac
-done
-    echo -e "${CYAN}│${NC} ${GREEN}[b]${NC} Setup 2 (For Ready To Exsit)                        ${CYAN}│${NC}"
-    echo -e "${CYAN}└────────────────────────────────────────────────────────┘${NC}"
-    echo -e "${RED}[0] Exit${NC}\n"
-}
-
-# ---------------------------------------------------------
-# Install Panel (FIXED INPUT PROMPTS)
-# ---------------------------------------------------------
-install_panel() {
-    clear
-    echo -e "${CYAN}┌────────────────────────────────────────┐${NC}"
-    echo -e "${CYAN}│             ${BOLD}JTP Installer${NC}${CYAN}              │${NC}"
-    echo -e "${CYAN}│    Made by jishnu | Edit by mrzetrix   │${NC}"
-    echo -e "${CYAN}│     (Alwas install latest update)      │${NC}"
-    echo -e "${CYAN}└────────────────────────────────────────┘${NC}"
-    
-    if [ -d "$PANEL_DIR" ]; then
-        cd "$PANEL_DIR" || { echo -e "${RED}[Error] Directory failed!${NC}"; sleep 2; return; }
-        echo -ne "➔ Pulling latest update... "
-        (git stash &>/dev/null && git pull &>/dev/null) & spinner $!
-        echo -e "[${GREEN}✓${NC}]"
-    else
-        echo -ne "➔ Cloning Repository... "
-        git clone "$GIT_REPO" "$PANEL_DIR" &>/dev/null & spinner $!
-        cd "$PANEL_DIR" || { echo -e "\n${RED}[Error] Clone failed!${NC}"; sleep 2; return; }
-        echo -e "[${GREEN}✓${NC}]"
-    fi
-    
-    get_sys_info
-    echo -e "[Info] OS {${OS_NAME}} / Updateing System's ➔ done. [${GREEN}✓${NC}]"
-    
-    echo -ne "➔ Installing NPM Packages... "
-    npm install &>/dev/null & spinner $!
-    echo -e "[${GREEN}✓${NC}]\n"
-
-    # ========= FIXED AREA: INTERACTIVE PROMPT =========
-    echo -e "${YELLOW}➔ Creating Admin User (Please follow prompts):${NC}"
-    # Running normally so the Node script can ask for Email, User, and Pass interactively
-    npm run createuser
-    echo -e "➔ User Setup ➔ done. [${GREEN}✓${NC}]\n"
-    # ==================================================
-
-    echo -ne "➔ Building Panel... "
-    npm run build &>/dev/null & spinner $!
-    echo -e "[${GREEN}✓${NC}]"
-
-    if [ -f "ecosystem.config.cjs" ]; then
-        pm2 start ecosystem.config.cjs &>/dev/null
-    else
-        pm2 start npm --name "JTP-Panel" -- run start &>/dev/null
-    fi
-    pm2 save &>/dev/null
-
-    echo -e "[Info] Instaling Panel ➔ done [${GREEN}✓${NC}]\n"
-    echo -e "             ${GREEN}${BOLD}ENjoy!!${NC}"
-    echo -e "          Thaks for using...\n"
-    echo -e "${YELLOW}• [Enter] Back to Installer...${NC}"
-    read -r
-    cd .. 2>/dev/null || true
-}
-
-# ---------------------------------------------------------
-# Uninstall Panel
-# ---------------------------------------------------------
-uninstall_panel() {
-    clear
-    echo -e "${RED}┌────────────────────────────────────────┐${NC}"
-    echo -e "${RED}│                ${BOLD}[Danger]${NC}${RED}                │${NC}"
-    echo -e "${RED}│             JTP Unstalling             │${NC}"
-    echo -e "${RED}│    Made by jishnu | Edit by MrZetrix   │${NC}"
-    echo -e "${RED}└────────────────────────────────────────┘${NC}"
-    
-    echo -ne "➔ ⚠️ Make sure uninstall Panel? [Y/N]: "
-    read -r confirm
-
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        if command -v pm2 &> /dev/null; then
-            pm2 stop all &>/dev/null
-            pm2 delete all &>/dev/null
-            pm2 save --force &>/dev/null
-        fi
-        rm -rf "$PANEL_DIR"
-        echo -e "\n[Info]: Panel uninstalled."
-        echo -e "• Thaks for useing..."
-    else
-        echo -e "\n[Info]: Cancelled."
-    fi
-    echo -e "\n${YELLOW}[Enter] Back to Manu...${NC}"
-    read -r
-}
-
-# ---------------------------------------------------------
-# Setup 1 (System Prep)
-# ---------------------------------------------------------
-run_setup_1() {
-    clear
-    echo -e "${CYAN}┌────────────────────────────────────────┐${NC}"
-    echo -e "${CYAN}│                ${BOLD}Setup 1${NC}${CYAN}                 │${NC}"
-    echo -e "${CYAN}│               JTP Panel                │${NC}"
-    echo -e "${CYAN}│    Made by jishnu | Edit by MrZetrix   │${NC}"
-    echo -e "${CYAN}└────────────────────────────────────────┘${NC}"
-    echo -e "• Setup 1 is starting...\n"
-
-    echo -n "• \ Install git ... "
-    (sudo apt update -y &>/dev/null && sudo apt install -y git &>/dev/null) & spinner $!
-    echo -e "[${GREEN}done${NC}]"
-
-    echo -n "• \ Installing Node.js (Wait) "
-    (curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - &>/dev/null && sudo apt install -y nodejs &>/dev/null) & spinner $!
-    echo -e "[${GREEN}████████████${NC}]"
-
-    echo -n "• \ Installing PM2 "
-    sudo npm install -g pm2 &>/dev/null & spinner $!
-    echo -e "[${GREEN}████████████${NC}]"
-
-    echo -n "• \ extra cloudflare "
-    echo -e "[${GREEN}████████████${NC}]"
-
-    echo -n "• ⬆ updating System's "
-    sudo apt update -y &>/dev/null & spinner $!
-    echo -e "[${GREEN}████████████${NC}]"
-
-    echo -n "• ⬆ upgradeing \" "
-    sudo apt upgrade -y &>/dev/null & spinner $!
-    echo -e "[${GREEN}████████████${NC}]"
-
-    echo -n "• Install curl ifconfig.me -----------> "
-    curl -s ifconfig.me &>/dev/null & spinner $!
-    echo -e "[${GREEN}done${NC}]"
-
-    echo -e "\n• ${GREEN}Setup 1 is complite.${NC}\n"
-    echo -e "${YELLOW}• Press [enter] to bake manu.${NC}"
-    read -r
-}
-
-# ---------------------------------------------------------
-# Cloudflare Zone
-# ---------------------------------------------------------
-cloudflare_zone() {
-    while true; do
-        clear
-        echo -e "${CYAN}┌────────────────────────────────────────┐${NC}"
-        echo -e "${CYAN}│            ${BOLD}Cloudflare Zone${NC}${CYAN}             │${NC}"
-        echo -e "${CYAN}│               JTP Panel                │${NC}"
-        echo -e "${CYAN}│    made by jishnu | Edit by MrZetrix   │${NC}"
-        echo -e "${CYAN}└────────────────────────────────────────┘${NC}"
-        
-        if command -v cloudflared &>/dev/null; then
-            CF_STATUS="${GREEN}Installed${NC}"
-        else
-            CF_STATUS="${RED}Not Installed${NC}"
-        fi
-        
-        echo -e "Cloudflare: {${CF_STATUS}}"
-        echo -e "${CYAN}┌────────────────────────────────────────┐${NC}"
-        echo -e "${CYAN}│${NC} 1| install and auto setup               ${CYAN}│${NC}"
-        echo -e "${CYAN}│${NC} 2| uninstall                            ${CYAN}│${NC}"
-        echo -e "${CYAN}│${NC} 0| back                                 ${CYAN}│${NC}"
-        echo -e "${CYAN}└────────────────────────────────────────┘${NC}"
-        echo -ne "Select: "
-        read -r cf_opt
-
-        case $cf_opt in
-            1)
-                echo -ne "\n${YELLOW}Installing Cloudflare... ${NC}"
-                (sudo mkdir -p /etc/apt/keyrings && curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /etc/apt/keyrings/cloudflare-main.gpg >/dev/null && echo "deb [signed-by=/etc/apt/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared jammy main" | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null && sudo apt update -y &>/dev/null && sudo apt install -y cloudflared &>/dev/null) & spinner $!
-                echo -e "\n${GREEN}Cloudflare installed successfully!${NC}"
-                sleep 2
-                ;;
-            2)
-                echo -ne "\n${YELLOW}Uninstalling... ${NC}"
-                sudo apt remove --purge -y cloudflared &>/dev/null & spinner $!
-                echo -e "\n${RED}Cloudflare uninstalled.${NC}"
-                sleep 2
-                ;;
-            0) break ;;
-            *) echo -e "${RED}Invalid option${NC}"; sleep 1 ;;
-        esac
-    done
-}
-
-# ---------------------------------------------------------
-# System Panel Control
-# ---------------------------------------------------------
-panel_system_menu() {
-    while true; do
-        clear
-        get_sys_info
-        echo -e "${CYAN}┌────────────────────────────────────────┐${NC}"
-        echo -e "${CYAN}│                 ${BOLD}System${NC}${CYAN}                 │${NC}"
-        echo -e "${CYAN}│               JTP Panel                │${NC}"
-        echo -e "${CYAN}│    Made by jishnu | Edit by MrZetrix   │${NC}"
-        echo -e "${CYAN}└────────────────────────────────────────┘${NC}"
-        echo -e "Panel start: {${PANEL_VAL}}"
-        echo -e "${CYAN}┌────────────────────────────────────────┐${NC}"
-        echo -e "${CYAN}│${NC} 1| Start Panel                          ${CYAN}│${NC}"
-        echo -e "${CYAN}│${NC} 2| Restart Panel                        ${CYAN}│${NC}"
-        echo -e "${CYAN}│${NC} 0| exist                                ${CYAN}│${NC}"
-        echo -e "${CYAN}└────────────────────────────────────────┘${NC}"
-        echo -ne "Select: "
-        read -r sys_opt
-
-        case $sys_opt in
-            1)
-                if [ ! -d "$PANEL_DIR" ]; then
-                    echo -e "\n${RED}[Error] Install panel first!${NC}"; sleep 2; continue
-                fi
-                cd "$PANEL_DIR" || continue
-                pm2 start ecosystem.config.cjs 2>/dev/null || pm2 start npm --name "JTP-Panel" -- run start &>/dev/null
-                cd .. 2>/dev/null || true
-                echo -e "\n${GREEN}Panel Started!${NC}"; sleep 1
-                ;;
-            2)
-                pm2 restart all &>/dev/null
-                echo -e "\n${GREEN}Panel Restarted!${NC}"; sleep 1
-                ;;
-            0) break ;;
-            *) echo -e "${RED}Invalid option${NC}"; sleep 1 ;;
-        esac
-    done
-}
-
-# ---------------------------------------------------------
-# Setup 2
-# ---------------------------------------------------------
-run_setup_2() {
-    clear
-    echo -e "${CYAN}┌────────────────────────────────────────┐${NC}"
-    echo -e "${CYAN}│              ${BOLD}Final setup${NC}${CYAN}               │${NC}"
-    echo -e "${CYAN}│               JTP Panel                │${NC}"
-    echo -e "${CYAN}│    Made by jishnu | Edit by MrZetrix   │${NC}"
-    echo -e "${CYAN}└────────────────────────────────────────┘${NC}"
-    echo -e "• Setup 2 is starting..."
-    echo -e "• Root acc. [Sudo] extra.\n"
-
-    if [ ! -d "$PANEL_DIR" ]; then
-        echo -e "${RED}[Error] Please install the panel (Option [i]) first!${NC}"
-        echo -e "${YELLOW}• [Enter] to back e main manu.${NC}"; read -r; return
-    fi
-
-    cd "$PANEL_DIR" || return
-
-    echo -n "• Install Package's (Wait) "
-    npm install &>/dev/null & spinner $!
-    echo -e "[${GREEN}████████████${NC}]"
-
-    echo -n "• ⬆ updateing -----------> "
-    npm run build &>/dev/null & spinner $!
-    echo -e "[${GREEN}done${NC}]"
-
-    echo -n "• ⬆ upgradeing -----------> "
-    (pm2 restart all 2>/dev/null || pm2 start ecosystem.config.cjs 2>/dev/null) & spinner $!
-    pm2 save 2>/dev/null
-    echo -e "[${GREEN}done${NC}]"
-
-    echo -e "\n• ${GREEN}Final setup is complited.${NC}\n"
-    echo -e "             ${GREEN}${BOLD}ENjoy!${NC}\n"
-    echo -e "${YELLOW}• [Enter] to back e main manu.${NC}"
-    read -r
-    cd .. 2>/dev/null || true
-}
-
-# ---------------------------------------------------------
-# Update Panel
-# ---------------------------------------------------------
-update_manual() {
-    clear
-    if [ ! -d "$PANEL_DIR" ]; then
-        echo -e "${RED}[Error] JTP Panel is not installed yet!${NC}"; sleep 2; return
-    fi
-    
-    cd "$PANEL_DIR" || return
-    echo -ne "${YELLOW}Updating Panel Files... ${NC}"
-    (git stash &>/dev/null && git pull &>/dev/null) & spinner $!
-    echo -e "[${GREEN}✓${NC}]"
-    
-    echo -ne "${YELLOW}Rebuilding Panel... ${NC}"
-    (npm i &>/dev/null && npm run build &>/dev/null) & spinner $!
-    echo -e "[${GREEN}✓${NC}]"
-    
-    echo -ne "${YELLOW}Restarting Services... ${NC}"
-    pm2 restart all &>/dev/null & spinner $!
-    echo -e "[${GREEN}✓${NC}]"
-    
-    echo -e "\n${GREEN}Update completed successfully!${NC}"
-    sleep 2
-    cd .. 2>/dev/null || true
-}
-
-# ---------------------------------------------------------
-# Main Execution Loop
-# ---------------------------------------------------------
-show_loading_screens
-
-while true; do
-    show_main_menu
-    echo -ne "• Select (i-v, a-b, 0): "
-    read -r user_choice
-
-    case $user_choice in
-        i|I) install_panel ;;
-        ii|II) update_manual ;;
-        iii|III) uninstall_panel ;;
-        iv|IV) panel_system_menu ;;
-        v|V) cloudflare_zone ;;
-        a|A) run_setup_1 ;;
-        b|B) run_setup_2 ;;
-        0) echo -e "\n${GREEN}Exiting JTP Panel Installer. Bye!${NC}\n"; exit 0 ;;
-        *) echo -e "${RED}Invalid input! Try again.${NC}"; sleep 1 ;;
     esac
 done
