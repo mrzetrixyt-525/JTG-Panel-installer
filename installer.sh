@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # =========================================================
-# JTP Panel - Advanced Terminal UI Script (Fully Optimized)
+# JTP Panel - Advanced Terminal UI Script (Input Fixed)
 # Made by: Jishnu | Edit by: MrZetrix
 # Panel Name: JTP Panel
 # =========================================================
@@ -112,7 +112,7 @@ show_main_menu() {
 }
 
 # ---------------------------------------------------------
-# Install Panel
+# Install Panel (FIXED INPUT PROMPTS)
 # ---------------------------------------------------------
 install_panel() {
     clear
@@ -133,19 +133,23 @@ install_panel() {
         cd "$PANEL_DIR" || { echo -e "\n${RED}[Error] Clone failed!${NC}"; sleep 2; return; }
         echo -e "[${GREEN}✓${NC}]"
     fi
-
-    echo -e "➔ Username: done. [${GREEN}✓${NC}]"
-    echo -e "➔ Password: ******* done. [${GREEN}✓${NC}]"
     
     get_sys_info
     echo -e "[Info] OS {${OS_NAME}} / Updateing System's ➔ done. [${GREEN}✓${NC}]"
     
     echo -ne "➔ Installing NPM Packages... "
     npm install &>/dev/null & spinner $!
-    echo -e "[${GREEN}✓${NC}]"
+    echo -e "[${GREEN}✓${NC}]\n"
 
-    echo -ne "➔ Creating User & Building... "
-    (npm run createuser &>/dev/null && npm run build &>/dev/null) & spinner $!
+    # ========= FIXED AREA: INTERACTIVE PROMPT =========
+    echo -e "${YELLOW}➔ Creating Admin User (Please follow prompts):${NC}"
+    # Running normally so the Node script can ask for Email, User, and Pass interactively
+    npm run createuser
+    echo -e "➔ User Setup ➔ done. [${GREEN}✓${NC}]\n"
+    # ==================================================
+
+    echo -ne "➔ Building Panel... "
+    npm run build &>/dev/null & spinner $!
     echo -e "[${GREEN}✓${NC}]"
 
     if [ -f "ecosystem.config.cjs" ]; then
