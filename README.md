@@ -1,6 +1,6 @@
-# ⚡ JTG Panel V2 - Advanced Installer Core
+# ⚡ JTG Panel V2 - Installer cmd
 
-> **Credits:** Original Panel by **Jishnu** | Script Core & Optimization by **MrZetrix**
+> **Credits:** by **Jishnu** | Cmd Edit by **MrZetrix**
 
 ---
 
@@ -21,7 +21,7 @@
 
 ## ⚙️ System Requirements
 
-* **Operating System:** Ubuntu (20.04/22.04/24.04), Debian (11/12), or Docker containers.
+* **Operating System:** Ubuntu (20.04/22.04/24.04), Debian (11/12), or Docker containers, Node.js supported.
 * **Privileges:** `root` access or a user with `sudo` permissions.
 * **Dependencies:** Internet connection to fetch dependencies.
 
