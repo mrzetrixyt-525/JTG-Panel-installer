@@ -34,4 +34,4 @@
 Run the following command in your terminal to launch the interactive UI:
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/mrzetrixyt-525/JTG-Panel-installer/refs/heads/main/installer.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/mrzetrixyt-525/JTG-Panel-installer/refs/heads/main/Jtg-Panel-Installer.sh)
