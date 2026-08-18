@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =========================================================
-# JTG Panel V2 - Advanced Terminal UI Script (Pro Edition)
+# JTG Panel V3 - Advanced Terminal UI Script (Pro Edition)
 # Made by: Jishnu | Edit by: MrZetrix
 # Panel Directory: Jtg
 # Optimized for: Ubuntu, Debian, Docker Environments
@@ -151,7 +151,7 @@ install_cloudflared_binary() {
 show_loading_screens() {
     clear
     echo -e "\n\n"
-    echo -e " ${CYAN}${BOLD}INITIALIZING JTG PANEL V2 CORE...${NC}"
+    echo -e " ${CYAN}${BOLD}INITIALIZING JTG PANEL V3...${NC}"
     echo -e " ${GRAY}──────────────────────────────────────────────────${NC}"
     echo -ne " ["
     for i in {1..50}; do
@@ -167,7 +167,7 @@ show_main_menu() {
     get_sys_info
     clear
     echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-    echo -e "${CYAN}│ ${BOLD}${WHITE}JTG PANEL V2 CONTROL CENTER${NC}${CYAN} │${NC}"
+    echo -e "${CYAN}│ ${BOLD}${WHITE}JTG PANEL V3 Installer${NC}${CYAN} │${NC}"
     echo -e "${CYAN}│ ${DIM}Made by Jishnu • Edit by MrZetrix${NC}${CYAN} │${NC}"
     echo -e "${CYAN}├──────────────────────────────────────────────────┤${NC}"
     printf "${CYAN}│${NC} %-14s : %-29s ${CYAN}│${NC}\n" "System OS" "${WHITE}${OS_NAME:0:27}${NC}"
@@ -176,7 +176,7 @@ show_main_menu() {
     printf "${CYAN}│${NC} %-14s : %-29s ${CYAN}│${NC}\n" "Panel Status" "${PANEL_VAL}"
     printf "${CYAN}│${NC} %-14s : %-29s ${CYAN}│${NC}\n" "CF Tunnel" "${CF_VAL}"
     echo -e "${CYAN}├──────────────────────────────────────────────────┤${NC}"
-    echo -e "${CYAN}│${NC} ${GREEN}[1]${NC} Install JTG Panel V2 ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${GREEN}[1]${NC} Install JTG Panel V3 ${CYAN}│${NC}"
     echo -e "${CYAN}│${NC} ${GREEN}[2]${NC} Update Panel & Packages ${CYAN}│${NC}"
     echo -e "${CYAN}│${NC} ${GREEN}[3]${NC} Panel Power Control (Start/Stop/Restart) ${CYAN}│${NC}"
     echo -e "${CYAN}│${NC} ${GREEN}[4]${NC} Cloudflare Tunnel Manager ${CYAN}│${NC}"
@@ -194,7 +194,7 @@ show_main_menu() {
 install_panel() {
     clear
     echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-    echo -e "${CYAN}│ ${BOLD}${WHITE}JTG PANEL V2 INSTALLATION WIZARD${NC}${CYAN} │${NC}"
+    echo -e "${CYAN}│ ${BOLD}${WHITE}JTG PANEL V3 INSTALLATION${NC}${CYAN} │${NC}"
     echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}\n"
 
     if [ -d "$PANEL_DIR" ]; then
@@ -247,7 +247,7 @@ cloudflare_zone() {
         clear
         get_sys_info
         echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-        echo -e "${CYAN}│ ${BOLD}${WHITE}CLOUDFLARE TUNNEL ZONE${NC}${CYAN} │${NC}"
+        echo -e "${CYAN}│ ${BOLD}${WHITE}CLOUDFLARE TUNNEL${NC}${CYAN} │${NC}"
         echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}"
         echo -e " Current Status: ${CF_VAL}\n"
         echo -e " ${GREEN}[1]${NC} Setup / Link Cloudflare Tunnel Token"
@@ -545,7 +545,7 @@ while true; do
         B|b) run_setup_2 ;;
         C|c) uninstall_panel ;;
         0)
-            echo -e "\n ${GREEN}System shut down gracefully. Goodbye!${NC}\n"
+            echo -e "\n ${GREEN}System shut down. Goodbye!${NC}\n"
             tput cnorm 2>/dev/null
             exit 0
             ;;
