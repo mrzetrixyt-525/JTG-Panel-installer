@@ -10,27 +10,24 @@
 # ------------------------------------------------------------------------------
 # ⚙️ SYSTEM CONFIGURATION & SAFETY FLAGS
 # ------------------------------------------------------------------------------
-# Prevent commands from hiding pipeline errors
 set -o pipefail
-# Suppress interactive prompts during APT package installations
 export DEBIAN_FRONTEND=noninteractive
 
 # ------------------------------------------------------------------------------
 # 🎨 HIGH-CONTRAST PRO COLOR PALETTE
 # ------------------------------------------------------------------------------
-# Utilizing deep violet and blood red for a premium, professional aesthetic
-VIOLET='\033[38;5;135m'      # Primary borders and branding
-SAPPHIRE='\033[38;5;33m'     # Secondary highlights
-CYAN='\033[38;5;51m'         # Input prompts and arrows
-NEON_GREEN='\033[38;5;46m'   # Success indicators
-GOLD='\033[38;5;220m'        # Warnings and setup prompts
-BLOOD_RED='\033[38;5;196m'   # Critical errors and destructive actions
-DARK_GRAY='\033[38;5;238m'   # Subtle dividers
-LIGHT_GRAY='\033[38;5;248m'  # Standard text
-WHITE='\033[38;5;255m'       # Emphasized text
-BOLD='\033[1m'               # Bold formatting
-DIM='\033[2m'                # Faded text for background info
-NC='\033[0m'                 # Reset color to terminal default
+VIOLET='\033[38;5;135m'
+SAPPHIRE='\033[38;5;33m'
+CYAN='\033[38;5;51m'
+NEON_GREEN='\033[38;5;46m'
+GOLD='\033[38;5;220m'
+BLOOD_RED='\033[38;5;196m'
+DARK_GRAY='\033[38;5;238m'
+LIGHT_GRAY='\033[38;5;248m'
+WHITE='\033[38;5;255m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
 
 # ------------------------------------------------------------------------------
 # 📦 GLOBAL VARIABLES
@@ -40,48 +37,39 @@ PANEL_DIR="Jtg"
 GIT_REPO="https://github.com/JishnuTheGamer/Jtg"
 APP_NAME="jtg-panel"
 
-# 🛡️ Cursor Safety Trap: Ensures cursor reappears if user hits CTRL+C
 trap 'tput cnorm 2>/dev/null; echo -e "\n${BLOOD_RED}Session interrupted. Exiting safely.${NC}"; exit' INT TERM EXIT
 
 # ==============================================================================
 # 🛠️ UTILITY FUNCTIONS
 # ==============================================================================
 
-# @description Checks if a specific command exists in the environment
-# @param $1 - The command to check (e.g., 'pm2', 'node')
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# @description Renders a smooth background loading animation
-# @param $1 - The Process ID (PID) of the background task to monitor
 spinner() {
     local pid=$1
     local delay=0.06
     local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    tput civis 2>/dev/null # Hide cursor
-    
-    # Loop while the background process is still running
+    tput civis 2>/dev/null
+
     while kill -0 "$pid" 2>/dev/null; do
         local temp=${spinstr#?}
         printf "\r ${VIOLET}[%c]${NC} ${CYAN}Executing runtime background process...${NC}" "$spinstr"
         spinstr=${temp}${spinstr%"$temp"}
         sleep "$delay"
     done
-    
-    # Clear line and restore cursor
+
     printf "\r\033[K"
     tput cnorm 2>/dev/null
 }
 
-# @description Queries PM2 directly via Node.js parsing to get exact app status
 get_pm2_status() {
     if ! command_exists pm2 || ! command_exists node; then
         echo "NOT_INSTALLED"
         return
     fi
-    
-    # Executes PM2 jlist and parses the JSON output natively with Node
+
     local status
     status=$(pm2 jlist 2>/dev/null | node -e "
         let data = '';
@@ -89,7 +77,6 @@ get_pm2_status() {
         process.stdin.on('end', () => {
             try {
                 let json = JSON.parse(data);
-                // Look for common app names
                 let app = json.find(x => x.name === '$APP_NAME' || x.name === 'Jtg' || x.name === 'ecosystem');
                 if (app) console.log(app.pm2_env.status.toUpperCase());
                 else console.log('INACTIVE');
@@ -99,9 +86,7 @@ get_pm2_status() {
     echo "${status:-INACTIVE}"
 }
 
-# @description Gathers telemetry (OS, Uptime, Panel State, Cloudflare State)
 get_sys_info() {
-    # Determine Operating System
     if [ -f /etc/os-release ]; then
         OS_NAME=$(grep -E '^PRETTY_NAME=' /etc/os-release | cut -d '=' -f2- | tr -d '"')
         [ -z "$OS_NAME" ] && OS_NAME=$(grep -E '^NAME=' /etc/os-release | cut -d '=' -f2- | tr -d '"')
@@ -109,12 +94,10 @@ get_sys_info() {
         OS_NAME="Linux Server Environment"
     fi
     [ -z "$OS_NAME" ] && OS_NAME="Unknown Linux"
-    
-    # Get Server Uptime
+
     UPTIME_VAL=$(uptime -p 2>/dev/null | sed 's/^up //')
     [ -z "$UPTIME_VAL" ] && UPTIME_VAL="N/A"
 
-    # Evaluate PM2 and Panel App Status
     if command_exists pm2; then
         PM2_VAL="${NEON_GREEN}ACTIVE${NC}"
         local pm2_stat
@@ -131,7 +114,6 @@ get_sys_info() {
         PANEL_VAL="${DARK_GRAY}UNINSTALLED${NC}"
     fi
 
-    # Evaluate Cloudflare Tunnel Status
     if command_exists cloudflared; then
         if systemctl is-active --quiet cloudflared 2>/dev/null || pgrep -x cloudflared >/dev/null 2>&1; then
             CF_VAL="${NEON_GREEN}TUNNELING${NC}"
@@ -143,12 +125,14 @@ get_sys_info() {
     fi
 }
 
-# @description Downloads the correct Cloudflared daemon based on CPU Architecture
+# ==============================================================================
+# 🛡️ CLOUDFLARE ENHANCED INSTALL & REMOVAL
+# ==============================================================================
+
 install_cloudflared_binary() {
     local arch cf_arch
     arch=$(uname -m)
-    
-    # Map system architecture to Cloudflare binary naming convention
+
     case "$arch" in
         x86_64) cf_arch="amd64" ;;
         aarch64|arm64) cf_arch="arm64" ;;
@@ -156,67 +140,173 @@ install_cloudflared_binary() {
         *) cf_arch="amd64" ;;
     esac
 
-    # Install via DPKG if available, otherwise direct binary download
+    # Try dpkg method first (Debian/Ubuntu)
     if command_exists dpkg; then
-        curl -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}.deb" -o /tmp/cloudflared.deb >/dev/null 2>&1
-        sudo dpkg -i /tmp/cloudflared.deb >/dev/null 2>&1
-        rm -f /tmp/cloudflared.deb
-    else
-        curl -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}" -o /usr/local/bin/cloudflared >/dev/null 2>&1
-        chmod +x /usr/local/bin/cloudflared
+        echo -e " ${CYAN}➔${NC} Attempting installation via APT package..."
+        curl -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}.deb" -o /tmp/cloudflared.deb 2>/dev/null
+        if [ -f /tmp/cloudflared.deb ]; then
+            sudo dpkg -i /tmp/cloudflared.deb >/dev/null 2>&1
+            local dpkg_exit=$?
+            rm -f /tmp/cloudflared.deb
+            if [ $dpkg_exit -eq 0 ] && command_exists cloudflared; then
+                echo -e "  [${NEON_GREEN}✔${NC}] Cloudflared installed via dpkg."
+                return 0
+            else
+                echo -e "  [${GOLD}⚠${NC}] dpkg installation failed, falling back to binary..."
+            fi
+        fi
     fi
+
+    # Fallback: direct binary download
+    echo -e " ${CYAN}➔${NC} Downloading cloudflared binary directly..."
+    local bin_path="/usr/local/bin/cloudflared"
+    sudo curl -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}" -o "$bin_path" 2>/dev/null
+    if [ $? -eq 0 ] && [ -f "$bin_path" ]; then
+        sudo chmod +x "$bin_path"
+        echo -e "  [${NEON_GREEN}✔${NC}] Cloudflared binary installed to $bin_path."
+        return 0
+    else
+        echo -e "  [${BLOOD_RED}✘${NC}] Failed to install cloudflared. Please check network."
+        return 1
+    fi
+}
+
+uninstall_cloudflared() {
+    echo -e " ${CYAN}➔${NC} Stopping and removing Cloudflare service..."
+    sudo systemctl stop cloudflared >/dev/null 2>&1
+    sudo cloudflared service uninstall >/dev/null 2>&1
+
+    # Remove package if installed via dpkg
+    if dpkg -l cloudflared 2>/dev/null | grep -q "^ii"; then
+        sudo apt-get remove --purge -y cloudflared >/dev/null 2>&1
+        echo -e "  [${NEON_GREEN}✔${NC}] Cloudflared package purged."
+    fi
+
+    # Remove binary if present
+    if [ -f /usr/local/bin/cloudflared ]; then
+        sudo rm -f /usr/local/bin/cloudflared
+        echo -e "  [${NEON_GREEN}✔${NC}] Cloudflared binary removed."
+    fi
+
+    # Also remove possible config files
+    sudo rm -rf /etc/cloudflared 2>/dev/null
+    echo -e "  [${NEON_GREEN}✔${NC}] Cloudflare completely uninstalled."
+}
+
+# ==============================================================================
+# 🎬 ANIMATION & UI HELPERS
+# ==============================================================================
+
+typewriter() {
+    local text="$1"
+    local delay="${2:-0.03}"
+    for ((i=0; i<${#text}; i++)); do
+        echo -n "${text:$i:1}"
+        sleep "$delay"
+    done
+    echo
+}
+
+loading_bar() {
+    local duration=${1:-2}
+    local width=50
+    local elapsed=0
+    tput civis 2>/dev/null
+    while [ $elapsed -lt $duration ]; do
+        local progress=$((elapsed * 100 / duration))
+        local filled=$((progress * width / 100))
+        local empty=$((width - filled))
+        printf "\r${VIOLET}[${NC}"
+        printf "%${filled}s" '' | tr ' ' '█'
+        printf "%${empty}s" '' | tr ' ' '░'
+        printf "${VIOLET}]${NC} ${CYAN}%3d%%${NC}" "$progress"
+        sleep 0.05
+        ((elapsed++))
+    done
+    printf "\r${VIOLET}[${NC}"
+    printf "%${width}s" '' | tr ' ' '█'
+    printf "${VIOLET}]${NC} ${NEON_GREEN}100%%${NC}\n"
+    tput cnorm 2>/dev/null
 }
 
 # ==============================================================================
 # 🖥️ USER INTERFACE RENDERING
 # ==============================================================================
 
-# @description Displays a professional initialization boot screen
+strip_colors() {
+    echo "$1" | sed -E 's/\x1b\[[0-9;]*[mK]//g'
+}
+
+pad_to_width() {
+    local text="$1"
+    local width="$2"
+    local stripped=$(strip_colors "$text")
+    local current_len=${#stripped}
+    local padding=$((width - current_len))
+    if [ $padding -lt 0 ]; then padding=0; fi
+    printf "%s%*s" "$text" "$padding" ""
+}
+
 show_loading_screens() {
     clear
     echo -e "\n\n"
     echo -e " ${VIOLET}${BOLD}⚡ INITIALIZING JTG PRO DASHBOARD ENGINE...${NC}"
-    echo -e " ${DARK_GRAY}──────────────────────────────────────────────────────────────────${NC}"
-    echo -ne " ["
-    for i in {1..60}; do
-        echo -ne "${VIOLET}█${NC}"
-        sleep 0.015
-    done
-    echo -e "${DARK_GRAY}]${NC}"
+    loading_bar 3
     echo -e " ${NEON_GREEN}✔ Core Execution Environment Verified.${NC}"
     sleep 0.3
+    clear
+    echo -e "\n\n"
+    typewriter "  ${VIOLET}${BOLD}JTG PANEL PRO ${PANEL_VERSION}${NC}" 0.05
+    typewriter "  ${DARK_GRAY}Ultimate Management Interface${NC}" 0.04
+    echo
+    loading_bar 2
+    sleep 0.5
 }
 
-# @description Draws the dynamic dashboard header with live telemetry
 draw_header() {
     get_sys_info
     clear
-    echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${VIOLET}║ ${BOLD}${WHITE}JTG PANEL ${PANEL_VERSION} ${DARK_GRAY}──${NC} ${SAPPHIRE}MANAGEMENT INTERFACE${NC}${VIOLET}                    ║${NC}"
-    echo -e "${VIOLET}║ ${DIM}Core Architecture: Jishnu  ${DARK_GRAY}|${NC}${DIM} Enhanced & Maintained by: MrZetrix${NC}${VIOLET}   ║${NC}"
-    echo -e "${VIOLET}╠════════════════════════════════════════════════════════════════════════╣${NC}"
-    printf "${VIOLET}║${NC} ${CYAN}%-14s${NC} : %-22s ${DARK_GRAY}|${NC} ${CYAN}%-12s${NC} : %-15s ${VIOLET}║${NC}\n" "System OS" "${OS_NAME:0:22}" "PM2 Engine" "$PM2_VAL"
-    printf "${VIOLET}║${NC} ${CYAN}%-14s${NC} : %-22s ${DARK_GRAY}|${NC} ${CYAN}%-12s${NC} : %-15s ${VIOLET}║${NC}\n" "Host Uptime" "${UPTIME_VAL:0:22}" "Panel Status" "$PANEL_VAL"
-    printf "${VIOLET}║${NC} ${CYAN}%-14s${NC} : %-22s ${DARK_GRAY}|${NC} ${CYAN}%-12s${NC} : %-15s ${VIOLET}║${NC}\n" "Panel Dir" "${PANEL_DIR}" "Cloudflare" "$CF_VAL"
-    echo -e "${VIOLET}╚════════════════════════════════════════════════════════════════════════╝${NC}"
+
+    local header_width=64
+    local border="$(printf '%*s' "$header_width" '' | tr ' ' '═')"
+
+    echo -e "${VIOLET}╔${border}╗${NC}"
+    local title=" JTG PANEL ${PANEL_VERSION} ── MANAGEMENT INTERFACE "
+    echo -e "${VIOLET}║${NC} $(pad_to_width "$title" "$((header_width - 2))") ${VIOLET}║${NC}"
+    local sub=" Core Architecture: Jishnu  | Enhanced & Maintained by: MrZetrix "
+    echo -e "${VIOLET}║${NC} $(pad_to_width "$sub" "$((header_width - 2))") ${VIOLET}║${NC}"
+    echo -e "${VIOLET}╠${border}╣${NC}"
+
+    local line1="$(pad_to_width "${CYAN}System OS${NC}" 14) : $(pad_to_width "${OS_NAME:0:22}" 22) | $(pad_to_width "${CYAN}PM2 Engine${NC}" 12) : $(pad_to_width "$PM2_VAL" 15)"
+    local line2="$(pad_to_width "${CYAN}Host Uptime${NC}" 14) : $(pad_to_width "${UPTIME_VAL:0:22}" 22) | $(pad_to_width "${CYAN}Panel Status${NC}" 12) : $(pad_to_width "$PANEL_VAL" 15)"
+    local line3="$(pad_to_width "${CYAN}Panel Dir${NC}" 14) : $(pad_to_width "${PANEL_DIR}" 22) | $(pad_to_width "${CYAN}Cloudflare${NC}" 12) : $(pad_to_width "$CF_VAL" 15)"
+
+    echo -e "${VIOLET}║${NC} $line1 ${VIOLET}║${NC}"
+    echo -e "${VIOLET}║${NC} $line2 ${VIOLET}║${NC}"
+    echo -e "${VIOLET}║${NC} $line3 ${VIOLET}║${NC}"
+    echo -e "${VIOLET}╚${border}╝${NC}"
 }
 
-# @description Draws the interactive main menu
 show_main_menu() {
     draw_header
-    echo -e " ${VIOLET}${BOLD}┌── CORE CONTROLS ──────────────────────────────────────────────────────┐${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[1]${NC} Deploy JTG Panel ${PANEL_VERSION}   ${DARK_GRAY}──${NC} Clone repo, install & launch PM2    ${VIOLET}│${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[2]${NC} Update Core Script & App   ${DARK_GRAY}──${NC} Fetch latest code & rebuild assets  ${VIOLET}│${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[3]${NC} Power & Service Controller ${DARK_GRAY}──${NC} Start, Stop, or Restart PM2        ${VIOLET}│${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[4]${NC} Cloudflare Zero Trust     ${DARK_GRAY}──${NC} Secure & establish network tunnel  ${VIOLET}│${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[5]${NC} Administrator Operations  ${DARK_GRAY}──${NC} Add or reset admin user profile    ${VIOLET}│${NC}"
-    echo -e " ${VIOLET}└───────────────────────────────────────────────────────────────────────┘${NC}"
-    
-    echo -e " ${SAPPHIRE}${BOLD}┌── MAINTENANCE & SYSTEM PREP ──────────────────────────────────────────┐${NC}"
-    echo -e " ${SAPPHIRE}│${NC}  ${GOLD}[A]${NC} Install VPS Environment   ${DARK_GRAY}──${NC} Setup Node.js 20, Git, PM2 & Tools${SAPPHIRE}│${NC}"
-    echo -e " ${SAPPHIRE}│${NC}  ${GOLD}[B]${NC} Deep System Repair        ${DARK_GRAY}──${NC} Unlock APT, purge cache & rebuild  ${SAPPHIRE}│${NC}"
-    echo -e " ${SAPPHIRE}│${NC}  ${BLOOD_RED}[C]${NC} Purge Panel Entirely      ${DARK_GRAY}──${NC} Completely delete panel & PM2 tasks${SAPPHIRE}│${NC}"
-    echo -e " ${SAPPHIRE}└───────────────────────────────────────────────────────────────────────┘${NC}"
+
+    local menu_width=63
+    local border="$(printf '%*s' "$menu_width" '' | tr ' ' '─')"
+
+    echo -e " ${VIOLET}${BOLD}┌── CORE CONTROLS ${border}${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[1]${NC} Deploy JTG Panel ${PANEL_VERSION}   ── Clone repo, install & launch PM2    ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[2]${NC} Update Core Script & App   ── Fetch latest code & rebuild assets  ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[3]${NC} Power & Service Controller ── Start, Stop, or Restart PM2        ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[4]${NC} Cloudflare Zero Trust     ── Secure & establish network tunnel  ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[5]${NC} Administrator Operations  ── Add or reset admin user profile    ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}└───────────────────────────────────────────────────────┘${NC}"
+
+    echo -e " ${SAPPHIRE}${BOLD}┌── MAINTENANCE & SYSTEM PREP ${border}${NC}"
+    echo -e " ${SAPPHIRE}│${NC}  ${GOLD}[A]${NC} Install VPS Environment   ── Setup Node.js 20, Git, PM2 & Tools${SAPPHIRE}│${NC}"
+    echo -e " ${SAPPHIRE}│${NC}  ${GOLD}[B]${NC} Deep System Repair        ── Unlock APT, purge cache & rebuild  ${SAPPHIRE}│${NC}"
+    echo -e " ${SAPPHIRE}│${NC}  ${BLOOD_RED}[C]${NC} Purge Panel Entirely      ── Completely delete panel & PM2 tasks${SAPPHIRE}│${NC}"
+    echo -e " ${SAPPHIRE}└───────────────────────────────────────────────────────┘${NC}"
+
     echo -e "  ${BLOOD_RED}[0] Exit Manager${NC}\n"
 }
 
@@ -224,14 +314,12 @@ show_main_menu() {
 # 🚀 CORE EXECUTION MODULES
 # ==============================================================================
 
-# @description Handles full panel installation, dependencies, building, and launching
 install_panel() {
     clear
     echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${VIOLET}║ ${BOLD}${WHITE}DEPLOYING JTG PANEL ${PANEL_VERSION}${NC}${VIOLET}                                           ║${NC}"
     echo -e "${VIOLET}╚════════════════════════════════════════════════════════════════════════╝${NC}\n"
 
-    # Check if directory exists. If yes, sync. If no, clone.
     if [ -d "$PANEL_DIR" ]; then
         cd "$PANEL_DIR" || return
         echo -e " ${CYAN}➔${NC} Local repository directory exists. Pulling latest commits..."
@@ -249,23 +337,19 @@ install_panel() {
         echo -e "  [${NEON_GREEN}✔${NC}] Repository cloned."
     fi
 
-    # Install packages
     echo -e "\n ${CYAN}➔${NC} Fetching and building NPM packages..."
     npm install >/dev/null 2>&1 & spinner $!
     echo -e "  [${NEON_GREEN}✔${NC}] Dependencies compiled successfully."
 
-    # Create admin profile
     echo -e "\n ${GOLD}➔ Admin Credentials Configuration Required:${NC}"
     echo -e "  ${DIM}(Follow prompts below to register your administrator account)${NC}\n"
     npm run createuser
     echo -e "  [${NEON_GREEN}✔${NC}] Admin profile generated.\n"
 
-    # Build production assets
     echo -e " ${CYAN}➔${NC} Compiling production assets..."
     npm run build >/dev/null 2>&1 & spinner $!
     echo -e "  [${NEON_GREEN}✔${NC}] Assets compiled."
 
-    # Launch app
     echo -e "\n ${CYAN}➔${NC} Launching background application instance using PM2..."
     if [ -f "ecosystem.config.cjs" ]; then
         pm2 start ecosystem.config.cjs >/dev/null 2>&1
@@ -281,7 +365,6 @@ install_panel() {
     read -r
 }
 
-# @description Creates a new admin user post-installation
 admin_operations() {
     clear
     echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
@@ -304,7 +387,10 @@ admin_operations() {
     read -r
 }
 
-# @description Installs, configures, and manages Cloudflare Zero Trust securely
+# ==============================================================================
+# ☁️ CLOUDFLARE MANAGER — FIXED & ENHANCED
+# ==============================================================================
+
 cloudflare_manager() {
     while true; do
         draw_header
@@ -322,20 +408,20 @@ cloudflare_manager() {
                 echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
                 echo -e "${VIOLET}║ ${BOLD}${WHITE}CONNECT CLOUDFLARE TUNNEL${NC}${VIOLET}                                       ║${NC}"
                 echo -e "${VIOLET}╚════════════════════════════════════════════════════════════════════════╝${NC}\n"
-                
-                # Check for dependency
+
+                # Ensure cloudflared is installed
                 if ! command_exists cloudflared; then
-                    echo -e " ${CYAN}➔${NC} Downloading cloudflared architecture binary..."
-                    install_cloudflared_binary & spinner $!
-                    if ! command_exists cloudflared; then
-                        echo -e "  [${BLOOD_RED}✘${NC}] Failed to download Cloudflare binary binary!"
+                    echo -e " ${CYAN}➔${NC} Cloudflared not found. Installing..."
+                    if ! install_cloudflared_binary; then
+                        echo -e "  ${BLOOD_RED}✘ Installation failed. Aborting.${NC}"
                         sleep 2
                         continue
                     fi
-                    echo -e "  [${NEON_GREEN}✔${NC}] Binary installed successfully.\n"
+                else
+                    echo -e " ${NEON_GREEN}✔ Cloudflared is already installed.${NC}"
                 fi
 
-                echo -e " ${GOLD}Paste your Cloudflare Tunnel Token below:${NC}"
+                echo -e "\n ${GOLD}Paste your Cloudflare Tunnel Token below:${NC}"
                 echo -e " ${DIM}(Found in Cloudflare Zero Trust > Networks > Tunnels)${NC}\n"
                 echo -ne " ${CYAN}➔ Token:${NC} "
                 read -r cf_token
@@ -346,46 +432,61 @@ cloudflare_manager() {
                     continue
                 fi
 
-                # Cleanup old connections
-                echo -e "\n ${CYAN}➔${NC} Terminating stale tunnel daemons..."
+                # Clean up any existing service
+                echo -e "\n ${CYAN}➔${NC} Removing any stale tunnel service..."
                 sudo systemctl stop cloudflared >/dev/null 2>&1
                 sudo cloudflared service uninstall >/dev/null 2>&1
-                sleep 0.8
+                sleep 0.5
 
-                # Apply new token
-                echo -e " ${CYAN}➔${NC} Registering token service..."
-                (sudo cloudflared service install "$cf_token" >/dev/null 2>&1) & spinner $!
+                # Install new service with token
+                echo -e " ${CYAN}➔${NC} Registering and installing tunnel service..."
+                if sudo cloudflared service install "$cf_token" >/dev/null 2>&1; then
+                    echo -e "  [${NEON_GREEN}✔${NC}] Service installed successfully."
+                else
+                    echo -e "  [${BLOOD_RED}✘${NC}] Failed to install service. Token may be invalid."
+                    sleep 2
+                    continue
+                fi
 
-                echo -e " ${CYAN}➔${NC} Starting background tunnel daemon..."
+                echo -e " ${CYAN}➔${NC} Starting tunnel daemon..."
                 sudo systemctl daemon-reload >/dev/null 2>&1
                 sudo systemctl enable --now cloudflared >/dev/null 2>&1
-                sleep 1.2
+                sleep 2
 
-                # Verify connection state
+                # Verify status
                 if systemctl is-active --quiet cloudflared 2>/dev/null || pgrep -x cloudflared >/dev/null 2>&1; then
                     echo -e "\n ${NEON_GREEN}${BOLD}★ Cloudflare Tunnel is Active and Secured! ★${NC}"
+                    # Show tunnel info if possible
+                    if command_exists cloudflared; then
+                        echo -e "\n ${DIM}Tunnel details:${NC}"
+                        cloudflared tunnel info 2>/dev/null | head -n 3 | sed 's/^/   /'
+                    fi
                 else
-                    echo -e "\n ${BLOOD_RED}${BOLD}✘ Tunnel activation failed. Verify your token.${NC}"
+                    echo -e "\n ${BLOOD_RED}${BOLD}✘ Tunnel activation failed. Please check your token and network.${NC}"
+                    echo -e " ${GOLD}You can try to re-register with a valid token.${NC}"
                 fi
                 echo -ne "\n ${DIM}Press [Enter] to return...${NC}"
                 read -r
                 ;;
+
             2)
-                # Uninstall procedure
-                echo -e "\n ${CYAN}➔${NC} Removing Cloudflare Service..."
-                sudo systemctl stop cloudflared >/dev/null 2>&1
-                sudo cloudflared service uninstall >/dev/null 2>&1
-                sudo apt-get remove --purge -y cloudflared >/dev/null 2>&1 & spinner $!
-                echo -e "  [${NEON_GREEN}✔${NC}] Service fully removed."
+                # Uninstall
+                echo -e "\n ${CYAN}➔${NC} Proceeding with complete removal of Cloudflare..."
+                uninstall_cloudflared
+                echo -e " ${NEON_GREEN}${BOLD}★ Cloudflare has been fully removed from the system. ★${NC}"
                 sleep 1.5
                 ;;
+
             0) break ;;
             *) echo -e " ${BLOOD_RED}Invalid option.${NC}"; sleep 1 ;;
         esac
     done
 }
 
-# @description Interactive menu for managing the Node.js application process
+# ==============================================================================
+# ⚡ POWER CONTROL & MAINTENANCE (unchanged)
+# ==============================================================================
+
 panel_power_menu() {
     while true; do
         draw_header
@@ -443,7 +544,6 @@ panel_power_menu() {
     done
 }
 
-# @description Core dependency installation (Node 20, PM2, Git)
 run_setup_1() {
     clear
     echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
@@ -475,7 +575,6 @@ run_setup_1() {
     read -r
 }
 
-# @description Emergency system repair (clears locks, rebuilds node_modules)
 run_setup_2() {
     clear
     echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
@@ -522,7 +621,6 @@ run_setup_2() {
     read -r
 }
 
-# @description Safely handles codebase updates from GitHub without wiping config
 update_manual() {
     clear
     echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
@@ -556,7 +654,6 @@ update_manual() {
     read -r
 }
 
-# @description A highly destructive function to entirely format the application and PM2 logs
 uninstall_panel() {
     clear
     echo -e "${BLOOD_RED}╔════════════════════════════════════════════════════════════════════════╗${NC}"
@@ -594,7 +691,6 @@ uninstall_panel() {
 # ==============================================================================
 show_loading_screens
 
-# Infinite loop to keep the interactive menu alive until user exits via '0'
 while true; do
     show_main_menu
     echo -ne " ${CYAN}➔ Enter Command Option:${NC} "
