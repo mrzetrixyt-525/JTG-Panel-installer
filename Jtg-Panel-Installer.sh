@@ -52,14 +52,12 @@ spinner() {
     local delay=0.06
     local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     tput civis 2>/dev/null
-
     while kill -0 "$pid" 2>/dev/null; do
         local temp=${spinstr#?}
         printf "\r ${VIOLET}[%c]${NC} ${CYAN}Executing runtime background process...${NC}" "$spinstr"
         spinstr=${temp}${spinstr%"$temp"}
         sleep "$delay"
     done
-
     printf "\r\033[K"
     tput cnorm 2>/dev/null
 }
@@ -69,7 +67,6 @@ get_pm2_status() {
         echo "NOT_INSTALLED"
         return
     fi
-
     local status
     status=$(pm2 jlist 2>/dev/null | node -e "
         let data = '';
@@ -132,7 +129,6 @@ get_sys_info() {
 install_cloudflared_binary() {
     local arch cf_arch
     arch=$(uname -m)
-
     case "$arch" in
         x86_64) cf_arch="amd64" ;;
         aarch64|arm64) cf_arch="arm64" ;;
@@ -140,7 +136,6 @@ install_cloudflared_binary() {
         *) cf_arch="amd64" ;;
     esac
 
-    # Try dpkg method first (Debian/Ubuntu)
     if command_exists dpkg; then
         echo -e " ${CYAN}➔${NC} Attempting installation via APT package..."
         curl -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}.deb" -o /tmp/cloudflared.deb 2>/dev/null
@@ -157,7 +152,6 @@ install_cloudflared_binary() {
         fi
     fi
 
-    # Fallback: direct binary download
     echo -e " ${CYAN}➔${NC} Downloading cloudflared binary directly..."
     local bin_path="/usr/local/bin/cloudflared"
     sudo curl -sL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}" -o "$bin_path" 2>/dev/null
@@ -176,19 +170,15 @@ uninstall_cloudflared() {
     sudo systemctl stop cloudflared >/dev/null 2>&1
     sudo cloudflared service uninstall >/dev/null 2>&1
 
-    # Remove package if installed via dpkg
     if dpkg -l cloudflared 2>/dev/null | grep -q "^ii"; then
         sudo apt-get remove --purge -y cloudflared >/dev/null 2>&1
         echo -e "  [${NEON_GREEN}✔${NC}] Cloudflared package purged."
     fi
 
-    # Remove binary if present
     if [ -f /usr/local/bin/cloudflared ]; then
         sudo rm -f /usr/local/bin/cloudflared
         echo -e "  [${NEON_GREEN}✔${NC}] Cloudflared binary removed."
     fi
-
-    # Also remove possible config files
     sudo rm -rf /etc/cloudflared 2>/dev/null
     echo -e "  [${NEON_GREEN}✔${NC}] Cloudflare completely uninstalled."
 }
@@ -409,7 +399,6 @@ cloudflare_manager() {
                 echo -e "${VIOLET}║ ${BOLD}${WHITE}CONNECT CLOUDFLARE TUNNEL${NC}${VIOLET}                                       ║${NC}"
                 echo -e "${VIOLET}╚════════════════════════════════════════════════════════════════════════╝${NC}\n"
 
-                # Ensure cloudflared is installed
                 if ! command_exists cloudflared; then
                     echo -e " ${CYAN}➔${NC} Cloudflared not found. Installing..."
                     if ! install_cloudflared_binary; then
@@ -432,13 +421,11 @@ cloudflare_manager() {
                     continue
                 fi
 
-                # Clean up any existing service
                 echo -e "\n ${CYAN}➔${NC} Removing any stale tunnel service..."
                 sudo systemctl stop cloudflared >/dev/null 2>&1
                 sudo cloudflared service uninstall >/dev/null 2>&1
                 sleep 0.5
 
-                # Install new service with token
                 echo -e " ${CYAN}➔${NC} Registering and installing tunnel service..."
                 if sudo cloudflared service install "$cf_token" >/dev/null 2>&1; then
                     echo -e "  [${NEON_GREEN}✔${NC}] Service installed successfully."
@@ -453,10 +440,8 @@ cloudflare_manager() {
                 sudo systemctl enable --now cloudflared >/dev/null 2>&1
                 sleep 2
 
-                # Verify status
                 if systemctl is-active --quiet cloudflared 2>/dev/null || pgrep -x cloudflared >/dev/null 2>&1; then
                     echo -e "\n ${NEON_GREEN}${BOLD}★ Cloudflare Tunnel is Active and Secured! ★${NC}"
-                    # Show tunnel info if possible
                     if command_exists cloudflared; then
                         echo -e "\n ${DIM}Tunnel details:${NC}"
                         cloudflared tunnel info 2>/dev/null | head -n 3 | sed 's/^/   /'
@@ -470,7 +455,6 @@ cloudflare_manager() {
                 ;;
 
             2)
-                # Uninstall
                 echo -e "\n ${CYAN}➔${NC} Proceeding with complete removal of Cloudflare..."
                 uninstall_cloudflared
                 echo -e " ${NEON_GREEN}${BOLD}★ Cloudflare has been fully removed from the system. ★${NC}"
@@ -484,7 +468,7 @@ cloudflare_manager() {
 }
 
 # ==============================================================================
-# ⚡ POWER CONTROL & MAINTENANCE (unchanged)
+# ⚡ POWER CONTROL & MAINTENANCE
 # ==============================================================================
 
 panel_power_menu() {
