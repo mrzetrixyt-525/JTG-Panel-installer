@@ -37,7 +37,18 @@ PANEL_DIR="Jtg"
 GIT_REPO="https://github.com/JishnuTheGamer/Jtg"
 APP_NAME="jtg-panel"
 
-trap 'tput cnorm 2>/dev/null; echo -e "\n${BLOOD_RED}Session interrupted. Exiting safely.${NC}"; exit' INT TERM EXIT
+cleanup() {
+    tput cnorm 2>/dev/null
+}
+
+trap_exit() {
+    tput cnorm 2>/dev/null
+    echo -e "\n${BLOOD_RED}Session interrupted. Exiting safely.${NC}"
+    exit 1
+}
+
+trap cleanup EXIT
+trap trap_exit INT TERM
 
 # ==============================================================================
 # 🛠️ UTILITY FUNCTIONS
@@ -171,7 +182,7 @@ uninstall_cloudflared() {
     sudo cloudflared service uninstall >/dev/null 2>&1
 
     if dpkg -l cloudflared 2>/dev/null | grep -q "^ii"; then
-        sudo apt-get remove --purge -y cloudflared >/dev/null 2>&1
+        sudo DEBIAN_FRONTEND=noninteractive apt-get remove --purge -y cloudflared >/dev/null 2>&1
         echo -e "  [${NEON_GREEN}✔${NC}] Cloudflared package purged."
     fi
 
@@ -230,7 +241,8 @@ strip_colors() {
 pad_to_width() {
     local text="$1"
     local width="$2"
-    local stripped=$(strip_colors "$text")
+    local stripped
+    stripped=$(strip_colors "$text")
     local current_len=${#stripped}
     local padding=$((width - current_len))
     if [ $padding -lt 0 ]; then padding=0; fi
@@ -258,7 +270,8 @@ draw_header() {
     clear
 
     local header_width=64
-    local border="$(printf '%*s' "$header_width" '' | tr ' ' '═')"
+    local border
+    border="$(printf '%*s' "$header_width" '' | tr ' ' '═')"
 
     echo -e "${VIOLET}╔${border}╗${NC}"
     local title=" JTG PANEL ${PANEL_VERSION} ── MANAGEMENT INTERFACE "
@@ -281,20 +294,21 @@ show_main_menu() {
     draw_header
 
     local menu_width=63
-    local border="$(printf '%*s' "$menu_width" '' | tr ' ' '─')"
+    local border
+    border="$(printf '%*s' "$menu_width" '' | tr ' ' '─')"
 
     echo -e " ${VIOLET}${BOLD}┌── CORE CONTROLS ${border}${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[1]${NC} Deploy JTG Panel ${PANEL_VERSION}   ── Clone repo, install & launch PM2    ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[1]${NC} Deploy JTG Panel ${PANEL_VERSION}    ── Clone repo, install & launch PM2    ${VIOLET}│${NC}"
     echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[2]${NC} Update Core Script & App   ── Fetch latest code & rebuild assets  ${VIOLET}│${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[3]${NC} Power & Service Controller ── Start, Stop, or Restart PM2        ${VIOLET}│${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[4]${NC} Cloudflare Zero Trust     ── Secure & establish network tunnel  ${VIOLET}│${NC}"
-    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[5]${NC} Administrator Operations  ── Add or reset admin user profile    ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[3]${NC} Power & Service Controller ── Start, Stop, or Restart PM2         ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[4]${NC} Cloudflare Zero Trust      ── Secure & establish network tunnel  ${VIOLET}│${NC}"
+    echo -e " ${VIOLET}│${NC}  ${NEON_GREEN}[5]${NC} Administrator Operations   ── Add or reset admin user profile    ${VIOLET}│${NC}"
     echo -e " ${VIOLET}└───────────────────────────────────────────────────────┘${NC}"
 
     echo -e " ${SAPPHIRE}${BOLD}┌── MAINTENANCE & SYSTEM PREP ${border}${NC}"
-    echo -e " ${SAPPHIRE}│${NC}  ${GOLD}[A]${NC} Install VPS Environment   ── Setup Node.js 20, Git, PM2 & Tools${SAPPHIRE}│${NC}"
-    echo -e " ${SAPPHIRE}│${NC}  ${GOLD}[B]${NC} Deep System Repair        ── Unlock APT, purge cache & rebuild  ${SAPPHIRE}│${NC}"
-    echo -e " ${SAPPHIRE}│${NC}  ${BLOOD_RED}[C]${NC} Purge Panel Entirely      ── Completely delete panel & PM2 tasks${SAPPHIRE}│${NC}"
+    echo -e " ${SAPPHIRE}│${NC}  ${GOLD}[A]${NC} Install VPS Environment    ── Setup Node.js 20, Git, PM2 & Tools${SAPPHIRE}│${NC}"
+    echo -e " ${SAPPHIRE}│${NC}  ${GOLD}[B]${NC} Deep System Repair         ── Unlock APT, purge cache & rebuild  ${SAPPHIRE}│${NC}"
+    echo -e " ${SAPPHIRE}│${NC}  ${BLOOD_RED}[C]${NC} Purge Panel Entirely       ── Completely delete panel & PM2 tasks${SAPPHIRE}│${NC}"
     echo -e " ${SAPPHIRE}└───────────────────────────────────────────────────────┘${NC}"
 
     echo -e "  ${BLOOD_RED}[0] Exit Manager${NC}\n"
@@ -307,7 +321,7 @@ show_main_menu() {
 install_panel() {
     clear
     echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${VIOLET}║ ${BOLD}${WHITE}DEPLOYING JTG PANEL ${PANEL_VERSION}${NC}${VIOLET}                                           ║${NC}"
+    echo -e "${VIOLET}║ ${BOLD}${WHITE}DEPLOYING JTG PANEL ${PANEL_VERSION}${NC}${VIOLET}                                            ║${NC}"
     echo -e "${VIOLET}╚════════════════════════════════════════════════════════════════════════╝${NC}\n"
 
     if [ -d "$PANEL_DIR" ]; then
@@ -358,7 +372,7 @@ install_panel() {
 admin_operations() {
     clear
     echo -e "${VIOLET}╔════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${VIOLET}║ ${BOLD}${WHITE}ADMINISTRATOR PROFILE MANAGER${NC}${VIOLET}                                    ║${NC}"
+    echo -e "${VIOLET}║ ${BOLD}${WHITE}ADMINISTRATOR PROFILE MANAGER${NC}${VIOLET}                                     ║${NC}"
     echo -e "${VIOLET}╚════════════════════════════════════════════════════════════════════════╝${NC}\n"
 
     if [ ! -d "$PANEL_DIR" ]; then
@@ -378,7 +392,7 @@ admin_operations() {
 }
 
 # ==============================================================================
-# ☁️ CLOUDFLARE MANAGER — FIXED & ENHANCED
+# ☁️ CLOUDFLARE MANAGER
 # ==============================================================================
 
 cloudflare_manager() {
@@ -535,19 +549,19 @@ run_setup_1() {
     echo -e "${VIOLET}╚════════════════════════════════════════════════════════════════════════╝${NC}\n"
 
     echo -e " ${CYAN}➔${NC} Updating APT indices..."
-    sudo apt-get update -y >/dev/null 2>&1 & spinner $!
+    sudo DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 & spinner $!
     echo -e "  [${NEON_GREEN}✔${NC}] Repositories synced."
 
     echo -e "\n ${CYAN}➔${NC} Upgrading environment binaries..."
-    sudo apt-get upgrade -y >/dev/null 2>&1 & spinner $!
+    sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y >/dev/null 2>&1 & spinner $!
     echo -e "  [${NEON_GREEN}✔${NC}] Packages updated."
 
     echo -e "\n ${CYAN}➔${NC} Installing system build tools (Git, Curl, Build-Essential)..."
-    sudo apt-get install -y git curl build-essential >/dev/null 2>&1 & spinner $!
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y git curl build-essential >/dev/null 2>&1 & spinner $!
     echo -e "  [${NEON_GREEN}✔${NC}] Build packages installed."
 
     echo -e "\n ${CYAN}➔${NC} Provisioning Node.js 20.x runtime engine..."
-    ( curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - >/dev/null 2>&1 && sudo apt-get install -y nodejs >/dev/null 2>&1 ) & spinner $!
+    ( curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - >/dev/null 2>&1 && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs >/dev/null 2>&1 ) & spinner $!
     echo -e "  [${NEON_GREEN}✔${NC}] Node.js $(node -v 2>/dev/null) ready."
 
     echo -e "\n ${CYAN}➔${NC} Installing PM2 runtime process manager..."
@@ -690,7 +704,7 @@ while true; do
         B|b) run_setup_2 ;;
         C|c) uninstall_panel ;;
         0)
-            echo -e "\n ${NEON_GREEN}Session Terminated cleanly. Goodbye!${NC}\n"
+            echo -e "\n ${NEON_GREEN}Goodbye!${NC}\n"
             tput cnorm 2>/dev/null
             exit 0
             ;;
