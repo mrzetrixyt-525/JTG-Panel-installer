@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =========================================================
 # JTG Panel V3 - Advanced Terminal UI Script (Pro Edition)
-# Made by: Jishnu | Edit by: MrZetrix
+# Original Author: Jishnu | Edited by: MrZetrix
 # Panel Directory: Jtg
 # Optimized for: Ubuntu, Debian, Docker Environments
 # =========================================================
 
 set -o pipefail
-export DEBIAN_FRONTEND=noninteractive # Prevents installation prompts on Ubuntu/Debian
+export DEBIAN_FRONTEND=noninteractive
 
 # ---------------------------------------------------------
 # Premium Color Palette & Styling
@@ -24,11 +24,12 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
+PANEL_VERSION="V3"
 PANEL_DIR="Jtg"
 GIT_REPO="https://github.com/JishnuTheGamer/Jtg"
 APP_NAME="jtg-panel"
 
-# Clean cursor on exit/interrupt
+# Universal Clean Trap
 trap 'tput cnorm 2>/dev/null; exit' INT TERM EXIT
 
 # ---------------------------------------------------------
@@ -43,18 +44,18 @@ spinner() {
     local pid=$1
     local delay=0.08
     local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    tput civis 2>/dev/null # Hide cursor
+    tput civis 2>/dev/null
     while kill -0 "$pid" 2>/dev/null; do
         local temp=${spinstr#?}
         printf "\r ${CYAN}[%c]${NC} ${DIM}Processing, please wait...${NC}" "$spinstr"
         spinstr=${temp}${spinstr%"$temp"}
         sleep "$delay"
     done
-    printf "\r\033[K" # Clear line cleanly
-    tput cnorm 2>/dev/null # Show cursor
+    printf "\r\033[K"
+    tput cnorm 2>/dev/null
 }
 
-# 100% Accurate PM2 Status Detection (Node.js JSON Parsing)
+# Accurate PM2 Status Detection
 get_pm2_status() {
     if ! command_exists pm2 || ! command_exists node; then
         echo "not_installed"
@@ -73,58 +74,51 @@ get_pm2_status() {
                 else console.log('not_found');
             } catch(e) { console.log('error'); }
         });
-    ")
+    " 2>/dev/null)
     echo "${status:-not_found}"
 }
 
-# ---------------------------------------------------------
-# Dynamic System & Service Info
-# ---------------------------------------------------------
+# Dynamic System & Service Info Gathering
 get_sys_info() {
-    local os_name uptime_val pm2_stat
     if [ -f /etc/os-release ]; then
-        os_name=$(grep -E '^PRETTY_NAME=' /etc/os-release | cut -d '=' -f2- | tr -d '"')
-        [ -z "$os_name" ] && os_name=$(grep -E '^NAME=' /etc/os-release | cut -d '=' -f2- | tr -d '"')
+        OS_NAME=$(grep -E '^PRETTY_NAME=' /etc/os-release | cut -d '=' -f2- | tr -d '"')
+        [ -z "$OS_NAME" ] && OS_NAME=$(grep -E '^NAME=' /etc/os-release | cut -d '=' -f2- | tr -d '"')
     else
-        os_name="Linux Server"
+        OS_NAME="Linux Server"
     fi
-    [ -z "$os_name" ] && os_name="Unknown OS"
+    [ -z "$OS_NAME" ] && OS_NAME="Unknown OS"
     
-    uptime_val=$(uptime -p 2>/dev/null | sed 's/^up //')
-    [ -z "$uptime_val" ] && uptime_val="N/A"
+    UPTIME_VAL=$(uptime -p 2>/dev/null | sed 's/^up //')
+    [ -z "$UPTIME_VAL" ] && UPTIME_VAL="N/A"
 
     if command_exists pm2; then
-        PM2_VAL="${GREEN}Online${NC}"
+        PM2_VAL="Online"
+        local pm2_stat
         pm2_stat=$(get_pm2_status)
         case "$pm2_stat" in
-            online)    PANEL_VAL="${GREEN}● Running${NC}" ;;
-            stopped)   PANEL_VAL="${YELLOW}● Stopped${NC}" ;;
-            errored)   PANEL_VAL="${RED}● Errored${NC}" ;;
-            not_found) PANEL_VAL="${GRAY}● Not Active${NC}" ;;
-            *)         PANEL_VAL="${GRAY}● Unknown Error${NC}" ;;
+            online)    PANEL_VAL="● Running" ;;
+            stopped)   PANEL_VAL="● Stopped" ;;
+            errored)   PANEL_VAL="● Errored" ;;
+            not_found) PANEL_VAL="● Not Active" ;;
+            *)         PANEL_VAL="● Unknown Error" ;;
         esac
     else
-        PM2_VAL="${RED}Offline${NC}"
-        PANEL_VAL="${GRAY}Not Installed${NC}"
+        PM2_VAL="Offline"
+        PANEL_VAL="Not Installed"
     fi
 
     if command_exists cloudflared; then
         if systemctl is-active --quiet cloudflared 2>/dev/null || pgrep -x cloudflared >/dev/null 2>&1; then
-            CF_VAL="${GREEN}● Active & Tunneling${NC}"
+            CF_VAL="● Active & Tunneling"
         else
-            CF_VAL="${YELLOW}● Installed (Offline)${NC}"
+            CF_VAL="● Installed (Offline)"
         fi
     else
-        CF_VAL="${RED}● Not Installed${NC}"
+        CF_VAL="● Not Installed"
     fi
-
-    OS_NAME="$os_name"
-    UPTIME_VAL="$uptime_val"
 }
 
-# ---------------------------------------------------------
-# Cloudflare Direct Architecture Binary Installer
-# ---------------------------------------------------------
+# Cloudflare Architecture Binary Installer
 install_cloudflared_binary() {
     local arch cf_arch
     arch=$(uname -m)
@@ -146,44 +140,64 @@ install_cloudflared_binary() {
 }
 
 # ---------------------------------------------------------
-# Premium UI Screens
+# UI Screens
 # ---------------------------------------------------------
 show_loading_screens() {
     clear
     echo -e "\n\n"
-    echo -e " ${CYAN}${BOLD}INITIALIZING JTG PANEL V3...${NC}"
+    echo -e " ${CYAN}${BOLD}INITIALIZING JTG PANEL ${PANEL_VERSION}...${NC}"
     echo -e " ${GRAY}──────────────────────────────────────────────────${NC}"
     echo -ne " ["
     for i in {1..50}; do
         echo -ne "${BLUE}█${NC}"
-        sleep 0.05
+        sleep 0.02
     done
     echo -e "${GRAY}]${NC}"
     echo -e " ${GREEN}✓ System Modules Fully Loaded.${NC}"
-    sleep 0.5
+    sleep 0.4
 }
 
 show_main_menu() {
     get_sys_info
     clear
     echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-    echo -e "${CYAN}│ ${BOLD}${WHITE}JTG PANEL V3 Installer${NC}${CYAN} │${NC}"
-    echo -e "${CYAN}│ ${DIM}Made by Jishnu • Edit by MrZetrix${NC}${CYAN} │${NC}"
+    echo -e "${CYAN}│ ${BOLD}${WHITE}JTG PANEL ${PANEL_VERSION} Installer${NC}${CYAN}                            │${NC}"
+    echo -e "${CYAN}│ ${DIM}Made by Jishnu • Edit by MrZetrix${NC}${CYAN}                │${NC}"
     echo -e "${CYAN}├──────────────────────────────────────────────────┤${NC}"
-    printf "${CYAN}│${NC} %-14s : %-29s ${CYAN}│${NC}\n" "System OS" "${WHITE}${OS_NAME:0:27}${NC}"
-    printf "${CYAN}│${NC} %-14s : %-29s ${CYAN}│${NC}\n" "Uptime" "${WHITE}${UPTIME_VAL:0:27}${NC}"
-    printf "${CYAN}│${NC} %-14s : %-29s ${CYAN}│${NC}\n" "PM2 Status" "${PM2_VAL}"
-    printf "${CYAN}│${NC} %-14s : %-29s ${CYAN}│${NC}\n" "Panel Status" "${PANEL_VAL}"
-    printf "${CYAN}│${NC} %-14s : %-29s ${CYAN}│${NC}\n" "CF Tunnel" "${CF_VAL}"
+    printf "${CYAN}│${NC} %-14s : ${WHITE}%-29s${NC} ${CYAN}│${NC}\n" "System OS" "${OS_NAME:0:29}"
+    printf "${CYAN}│${NC} %-14s : ${WHITE}%-29s${NC} ${CYAN}│${NC}\n" "Uptime" "${UPTIME_VAL:0:29}"
+    
+    # Colored dynamic statuses
+    if [[ "$PM2_VAL" == "Online" ]]; then
+        printf "${CYAN}│${NC} %-14s : ${GREEN}%-29s${NC} ${CYAN}│${NC}\n" "PM2 Status" "$PM2_VAL"
+    else
+        printf "${CYAN}│${NC} %-14s : ${RED}%-29s${NC} ${CYAN}│${NC}\n" "PM2 Status" "$PM2_VAL"
+    fi
+
+    if [[ "$PANEL_VAL" == *"Running"* ]]; then
+        printf "${CYAN}│${NC} %-14s : ${GREEN}%-29s${NC} ${CYAN}│${NC}\n" "Panel Status" "$PANEL_VAL"
+    elif [[ "$PANEL_VAL" == *"Stopped"* ]]; then
+        printf "${CYAN}│${NC} %-14s : ${YELLOW}%-29s${NC} ${CYAN}│${NC}\n" "Panel Status" "$PANEL_VAL"
+    else
+        printf "${CYAN}│${NC} %-14s : ${GRAY}%-29s${NC} ${CYAN}│${NC}\n" "Panel Status" "$PANEL_VAL"
+    fi
+
+    if [[ "$CF_VAL" == *"Active"* ]]; then
+        printf "${CYAN}│${NC} %-14s : ${GREEN}%-29s${NC} ${CYAN}│${NC}\n" "CF Tunnel" "$CF_VAL"
+    else
+        printf "${CYAN}│${NC} %-14s : ${RED}%-29s${NC} ${CYAN}│${NC}\n" "CF Tunnel" "$CF_VAL"
+    fi
+
     echo -e "${CYAN}├──────────────────────────────────────────────────┤${NC}"
-    echo -e "${CYAN}│${NC} ${GREEN}[1]${NC} Install JTG Panel V3 ${CYAN}│${NC}"
-    echo -e "${CYAN}│${NC} ${GREEN}[2]${NC} Update Panel & Packages ${CYAN}│${NC}"
-    echo -e "${CYAN}│${NC} ${GREEN}[3]${NC} Panel Power Control (Start/Stop/Restart) ${CYAN}│${NC}"
-    echo -e "${CYAN}│${NC} ${GREEN}[4]${NC} Cloudflare Tunnel Manager ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${GREEN}[1]${NC} Install JTG Panel ${PANEL_VERSION}                       ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${GREEN}[2]${NC} Update Panel & Packages                    ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${GREEN}[3]${NC} Panel Power Control (Start/Stop/Restart)    ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${GREEN}[4]${NC} Cloudflare Tunnel Manager                   ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${MAGENTA}[5]${NC} Add / Create Admin User                     ${CYAN}│${NC}"
     echo -e "${CYAN}├──────────────────────────────────────────────────┤${NC}"
-    echo -e "${CYAN}│${NC} ${YELLOW}[A]${NC} Environment Setup ${DIM}(VPS Prep & Node.js)${NC} ${CYAN}│${NC}"
-    echo -e "${CYAN}│${NC} ${YELLOW}[B]${NC} Smart Repair ${DIM}(DPKG, Lock & Cache Fix)${NC} ${CYAN}│${NC}"
-    echo -e "${CYAN}│${NC} ${RED}[C]${NC} Uninstall Panel System ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${YELLOW}[A]${NC} Environment Setup ${DIM}(VPS Prep & Node.js)${NC}      ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${YELLOW}[B]${NC} Smart Repair ${DIM}(DPKG, Lock & Cache Fix)${NC}       ${CYAN}│${NC}"
+    echo -e "${CYAN}│${NC} ${RED}[C]${NC} Uninstall Panel System                      ${CYAN}│${NC}"
     echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}"
     echo -e " ${RED}[0] Exit Terminal${NC}\n"
 }
@@ -194,16 +208,16 @@ show_main_menu() {
 install_panel() {
     clear
     echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-    echo -e "${CYAN}│ ${BOLD}${WHITE}JTG PANEL V3 INSTALLATION${NC}${CYAN} │${NC}"
+    echo -e "${CYAN}│ ${BOLD}${WHITE}JTG PANEL ${PANEL_VERSION} INSTALLATION${NC}${CYAN}                    │${NC}"
     echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}\n"
 
     if [ -d "$PANEL_DIR" ]; then
         cd "$PANEL_DIR" || return
-        echo -e "${CYAN}➔${NC} Directory existing. Pulling latest repository updates..."
+        echo -e "${CYAN}➔${NC} Directory exists. Pulling latest repository updates..."
         (git stash >/dev/null 2>&1 && git pull >/dev/null 2>&1) & spinner $!
         echo -e " [${GREEN}✓${NC}] Repository updated."
     else
-        echo -e "${CYAN}➔${NC} Cloning core JTG Panel V2 repository..."
+        echo -e "${CYAN}➔${NC} Cloning JTG Panel core repository..."
         git clone "$GIT_REPO" "$PANEL_DIR" >/dev/null 2>&1 & spinner $!
         if [ ! -d "$PANEL_DIR" ]; then
             echo -e "\n [${RED}✘${NC}] Git clone failed! Please check network connection."
@@ -214,14 +228,14 @@ install_panel() {
         echo -e " [${GREEN}✓${NC}] Repository cloned successfully."
     fi
 
-    echo -e "\n${CYAN}➔${NC} Installing NPM dependencies (This may take a moment)..."
+    echo -e "\n${CYAN}➔${NC} Installing NPM dependencies..."
     npm install >/dev/null 2>&1 & spinner $!
     echo -e " [${GREEN}✓${NC}] Dependencies installed."
 
     echo -e "\n${YELLOW}➔ Admin Setup Required:${NC}"
-    echo -e " ${DIM}(Passwords will be masked securely)${NC}"
+    echo -e " ${DIM}(Follow prompts to configure primary admin user)${NC}"
     npm run createuser
-    echo -e " [${GREEN}✓${NC}] Admin profile registered.\n"
+    echo -e " [${GREEN}✓${NC}] Admin setup complete.\n"
 
     echo -e "${CYAN}➔${NC} Building Panel Assets..."
     npm run build >/dev/null 2>&1 & spinner $!
@@ -236,10 +250,32 @@ install_panel() {
     pm2 save >/dev/null 2>&1
     echo -e " [${GREEN}✓${NC}] PM2 process saved and online.\n"
 
-    echo -e " ${GREEN}${BOLD}★ Installation Complete! JTG Panel V2 is running. ★${NC}"
+    cd .. 2>/dev/null || true
+    echo -e " ${GREEN}${BOLD}★ Installation Complete! JTG Panel ${PANEL_VERSION} is active. ★${NC}"
     echo -ne "\n ${DIM}Press [Enter] to return to main menu...${NC}"
     read -r
+}
+
+add_admin_user() {
+    clear
+    echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
+    echo -e "${CYAN}│ ${BOLD}${WHITE}CREATE ADMIN USER${NC}${CYAN}                               │${NC}"
+    echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}\n"
+
+    if [ ! -d "$PANEL_DIR" ]; then
+        echo -e " ${RED}Error: Panel is not installed yet! Install it first.${NC}"
+        sleep 2
+        return
+    fi
+
+    cd "$PANEL_DIR" || return
+    echo -e "${YELLOW}➔ Creating New Admin User Account:${NC}\n"
+    npm run createuser
     cd .. 2>/dev/null || true
+
+    echo -e "\n ${GREEN}${BOLD}★ Admin User created/updated successfully! ★${NC}"
+    echo -ne "\n ${DIM}Press [Enter] to return...${NC}"
+    read -r
 }
 
 cloudflare_zone() {
@@ -247,7 +283,7 @@ cloudflare_zone() {
         clear
         get_sys_info
         echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-        echo -e "${CYAN}│ ${BOLD}${WHITE}CLOUDFLARE TUNNEL${NC}${CYAN} │${NC}"
+        echo -e "${CYAN}│ ${BOLD}${WHITE}CLOUDFLARE TUNNEL MANAGER${NC}${CYAN}                        │${NC}"
         echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}"
         echo -e " Current Status: ${CF_VAL}\n"
         echo -e " ${GREEN}[1]${NC} Setup / Link Cloudflare Tunnel Token"
@@ -260,14 +296,14 @@ cloudflare_zone() {
             1)
                 clear
                 echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-                echo -e "${CYAN}│ ${BOLD}${WHITE}CLOUDFLARE TOKEN CONNECT${NC}${CYAN} │${NC}"
+                echo -e "${CYAN}│ ${BOLD}${WHITE}CLOUDFLARE TOKEN CONNECT${NC}${CYAN}                         │${NC}"
                 echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}\n"
                 
                 if ! command_exists cloudflared; then
-                    echo -e "${CYAN}➔${NC} Cloudflared missing. Downloading & installing..."
+                    echo -e "${CYAN}➔${NC} Downloading & installing cloudflared..."
                     install_cloudflared_binary & spinner $!
                     if ! command_exists cloudflared; then
-                        echo -e " [${RED}✘${NC}] Failed to install Cloudflare binary automatically!"
+                        echo -e " [${RED}✘${NC}] Failed to install Cloudflare binary!"
                         sleep 2
                         continue
                     fi
@@ -275,7 +311,7 @@ cloudflare_zone() {
                 fi
 
                 echo -e "${YELLOW}Please paste your Cloudflare Tunnel Token below:${NC}"
-                echo -e "${DIM}(Copy from Cloudflare Zero Trust Dashboard > Networks > Tunnels)${NC}\n"
+                echo -e "${DIM}(Dashboard > Zero Trust > Networks > Tunnels)${NC}\n"
                 echo -ne " ${CYAN}➔ Token:${NC} "
                 read -r cf_token
 
@@ -285,29 +321,29 @@ cloudflare_zone() {
                     continue
                 fi
 
-                echo -e "\n${CYAN}➔${NC} Cleaning older tunnel services..."
+                echo -e "\n${CYAN}➔${NC} Cleaning old tunnel services..."
                 sudo systemctl stop cloudflared >/dev/null 2>&1
                 sudo cloudflared service uninstall >/dev/null 2>&1
                 sleep 1
 
-                echo -e "${CYAN}➔${NC} Installing new Cloudflare Tunnel service..."
+                echo -e "${CYAN}➔${NC} Registering Cloudflare Tunnel service..."
                 (sudo cloudflared service install "$cf_token" >/dev/null 2>&1) & spinner $!
 
-                echo -e "${CYAN}➔${NC} Enabling and starting background daemon..."
+                echo -e "${CYAN}➔${NC} Enabling and starting background service..."
                 sudo systemctl daemon-reload >/dev/null 2>&1
                 sudo systemctl enable --now cloudflared >/dev/null 2>&1
                 sleep 1.5
 
                 if systemctl is-active --quiet cloudflared 2>/dev/null || pgrep -x cloudflared >/dev/null 2>&1; then
-                    echo -e "\n ${GREEN}${BOLD}★ Cloudflare Tunnel Successfully Connected & Active! ★${NC}"
+                    echo -e "\n ${GREEN}${BOLD}★ Cloudflare Tunnel Active & Protected! ★${NC}"
                 else
-                    echo -e "\n ${RED}${BOLD}✘ Tunnel failed to activate. Please verify your token.${NC}"
+                    echo -e "\n ${RED}${BOLD}✘ Tunnel failed to activate. Verify your token.${NC}"
                 fi
                 echo -ne "\n ${DIM}Press [Enter] to return...${NC}"
                 read -r
                 ;;
             2)
-                echo -e "\n${CYAN}➔${NC} Stopping and removing Cloudflare Service..."
+                echo -e "\n${CYAN}➔${NC} Purging Cloudflare Tunnel Service..."
                 sudo systemctl stop cloudflared >/dev/null 2>&1
                 sudo cloudflared service uninstall >/dev/null 2>&1
                 sudo apt-get remove --purge -y cloudflared >/dev/null 2>&1 & spinner $!
@@ -325,7 +361,7 @@ panel_system_menu() {
         clear
         get_sys_info
         echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-        echo -e "${CYAN}│ ${BOLD}${WHITE}PANEL POWER CONTROLLER${NC}${CYAN} │${NC}"
+        echo -e "${CYAN}│ ${BOLD}${WHITE}PANEL POWER CONTROLLER${NC}${CYAN}                           │${NC}"
         echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}"
         echo -e " Current Status: ${PANEL_VAL}\n"
         echo -e " ${GREEN}[1]${NC} Start Panel"
@@ -383,30 +419,30 @@ panel_system_menu() {
 run_setup_1() {
     clear
     echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-    echo -e "${CYAN}│ ${BOLD}${WHITE}ENVIRONMENT SETUP (SETUP 1)${NC}${CYAN} │${NC}"
+    echo -e "${CYAN}│ ${BOLD}${WHITE}ENVIRONMENT SETUP (SETUP A)${NC}${CYAN}                      │${NC}"
     echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}\n"
 
-    echo -e "${CYAN}➔${NC} Updating APT package lists..."
+    echo -e "${CYAN}➔${NC} Updating APT package repositories..."
     sudo apt-get update -y >/dev/null 2>&1 & spinner $!
-    echo -e " [${GREEN}✓${NC}] APT updated."
+    echo -e " [${GREEN}✓${NC}] Repositories updated."
 
-    echo -e "\n${CYAN}➔${NC} Upgrading system dependencies..."
+    echo -e "\n${CYAN}➔${NC} Upgrading system core dependencies..."
     sudo apt-get upgrade -y >/dev/null 2>&1 & spinner $!
-    echo -e " [${GREEN}✓${NC}] Dependencies upgraded."
+    echo -e " [${GREEN}✓${NC}] Packages upgraded."
 
     echo -e "\n${CYAN}➔${NC} Installing Git, Curl, Build essential tools..."
     sudo apt-get install -y git curl build-essential >/dev/null 2>&1 & spinner $!
-    echo -e " [${GREEN}✓${NC}] Essential tools ready."
+    echo -e " [${GREEN}✓${NC}] Core packages ready."
 
-    echo -e "\n${CYAN}➔${NC} Installing Node.js 20.x runtime..."
+    echo -e "\n${CYAN}➔${NC} Installing Node.js 20.x runtime engine..."
     ( curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - >/dev/null 2>&1 && sudo apt-get install -y nodejs >/dev/null 2>&1 ) & spinner $!
     echo -e " [${GREEN}✓${NC}] Node.js $(node -v 2>/dev/null) installed."
 
-    echo -e "\n${CYAN}➔${NC} Installing PM2 process manager globally..."
+    echo -e "\n${CYAN}➔${NC} Installing PM2 Process Manager globally..."
     sudo npm install -g pm2 >/dev/null 2>&1 & spinner $!
-    echo -e " [${GREEN}✓${NC}] PM2 ready.\n"
+    echo -e " [${GREEN}✓${NC}] PM2 engine online.\n"
 
-    echo -e " ${GREEN}${BOLD}★ System Environment Prep Completed! ★${NC}"
+    echo -e " ${GREEN}${BOLD}★ VPS Environment Preparation Complete! ★${NC}"
     echo -ne "\n ${DIM}Press [Enter] to return...${NC}"
     read -r
 }
@@ -414,14 +450,13 @@ run_setup_1() {
 run_setup_2() {
     clear
     echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-    echo -e "${CYAN}│ ${BOLD}${WHITE}SMART REPAIR & UNLOCK (SETUP 2)${NC}${CYAN} │${NC}"
+    echo -e "${CYAN}│ ${BOLD}${WHITE}SMART REPAIR & UNLOCK (SETUP B)${NC}${CYAN}                  │${NC}"
     echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}\n"
-    echo -e "${DIM}Safely clearing dpkg/apt locks and rebuilding node modules...${NC}\n"
 
-    echo -e "${CYAN}➔${NC} Clearing APT and DPKG locks..."
+    echo -e "${CYAN}➔${NC} Clearing DPKG and APT package locks..."
     sudo rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock /var/lib/dpkg/lock* 2>/dev/null
     sudo dpkg --configure -a >/dev/null 2>&1
-    echo -e " [${GREEN}✓${NC}] System package locks cleared."
+    echo -e " [${GREEN}✓${NC}] Locks unlocked."
 
     if [ ! -d "$PANEL_DIR" ]; then
         echo -e "\n ${RED}Panel directory ($PANEL_DIR) not found. Skipping NPM repair.${NC}"
@@ -431,17 +466,17 @@ run_setup_2() {
     fi
 
     cd "$PANEL_DIR" || return
-    echo -e "\n${CYAN}➔${NC} Cleaning corrupted lockfiles and NPM cache..."
+    echo -e "\n${CYAN}➔${NC} Purging corrupted modules & cache..."
     rm -f package-lock.json yarn.lock pnpm-lock.yaml 2>/dev/null
     rm -rf node_modules 2>/dev/null
     npm cache clean --force >/dev/null 2>&1
-    echo -e " [${GREEN}✓${NC}] NPM Cache wiped."
+    echo -e " [${GREEN}✓${NC}] NPM cache wiped."
 
-    echo -e "\n${CYAN}➔${NC} Re-installing NPM packages cleanly..."
+    echo -e "\n${CYAN}➔${NC} Rebuilding NPM dependencies cleanly..."
     npm install >/dev/null 2>&1 & spinner $!
     echo -e " [${GREEN}✓${NC}] Clean dependencies installed."
 
-    echo -e "\n${CYAN}➔${NC} Rebuilding application..."
+    echo -e "\n${CYAN}➔${NC} Recompiling application..."
     npm run build >/dev/null 2>&1 & spinner $!
     echo -e " [${GREEN}✓${NC}] App rebuilt."
 
@@ -450,53 +485,53 @@ run_setup_2() {
         pm2 restart "$APP_NAME" >/dev/null 2>&1 || pm2 start ecosystem.config.cjs >/dev/null 2>&1
         pm2 save >/dev/null 2>&1
     fi
+    cd .. 2>/dev/null || true
     echo -e " [${GREEN}✓${NC}] Services restored.\n"
 
-    echo -e " ${GREEN}${BOLD}★ System Repaired and Optimized! ★${NC}"
+    echo -e " ${GREEN}${BOLD}★ System Successfully Repaired! ★${NC}"
     echo -ne "\n ${DIM}Press [Enter] to return...${NC}"
     read -r
-    cd .. 2>/dev/null || true
 }
 
 update_manual() {
     clear
     echo -e "${CYAN}╭──────────────────────────────────────────────────╮${NC}"
-    echo -e "${CYAN}│ ${BOLD}${WHITE}SYSTEM MANUAL UPDATE${NC}${CYAN} │${NC}"
+    echo -e "${CYAN}│ ${BOLD}${WHITE}SYSTEM MANUAL UPDATE${NC}${CYAN}                             │${NC}"
     echo -e "${CYAN}╰──────────────────────────────────────────────────╯${NC}\n"
 
     if [ ! -d "$PANEL_DIR" ]; then
-        echo -e " ${RED}Error: Panel not installed yet!${NC}"
+        echo -e " ${RED}Error: Panel is not installed yet!${NC}"
         sleep 2
         return
     fi
 
     cd "$PANEL_DIR" || return
-    echo -e "${CYAN}➔${NC} Pulling latest updates from GitHub..."
+    echo -e "${CYAN}➔${NC} Syncing repository with GitHub..."
     (git stash >/dev/null 2>&1 && git pull >/dev/null 2>&1) & spinner $!
     echo -e " [${GREEN}✓${NC}] Git sync complete."
 
-    echo -e "\n${CYAN}➔${NC} Updating packages and building..."
+    echo -e "\n${CYAN}➔${NC} Rebuilding packages..."
     (npm install >/dev/null 2>&1 && npm run build >/dev/null 2>&1) & spinner $!
-    echo -e " [${GREEN}✓${NC}] Build complete."
+    echo -e " [${GREEN}✓${NC}] Build updated."
 
-    echo -e "\n${CYAN}➔${NC} Restarting Panel..."
+    echo -e "\n${CYAN}➔${NC} Restarting Panel Engine..."
     if command_exists pm2; then
         pm2 restart "$APP_NAME" >/dev/null 2>&1
     fi
-    echo -e " [${GREEN}✓${NC}] Restarted.\n"
+    cd .. 2>/dev/null || true
+    echo -e " [${GREEN}✓${NC}] Services restarted.\n"
 
     echo -e " ${GREEN}${BOLD}★ Update Complete! ★${NC}"
     echo -ne "\n ${DIM}Press [Enter] to return...${NC}"
     read -r
-    cd .. 2>/dev/null || true
 }
 
 uninstall_panel() {
     clear
     echo -e "${RED}╭──────────────────────────────────────────────────╮${NC}"
-    echo -e "${RED}│ ${BOLD}${WHITE}SYSTEM PURGE${NC}${RED} │${NC}"
+    echo -e "${RED}│ ${BOLD}${WHITE}SYSTEM PURGE${NC}${RED}                                     │${NC}"
     echo -e "${RED}╰──────────────────────────────────────────────────╯${NC}\n"
-    echo -e " ${RED}${BOLD}⚠️ WARNING: THIS WILL COMPLETELY PURGE THE JTG PANEL V2!${NC}\n"
+    echo -e " ${RED}${BOLD}⚠️ WARNING: THIS WILL COMPLETELY PURGE THE JTG PANEL!${NC}\n"
     echo -ne " ${YELLOW}Are you sure you want to proceed? [Y/N]: ${NC}"
     read -r confirm
 
@@ -510,16 +545,16 @@ uninstall_panel() {
             fi
             echo -e " [${GREEN}✓${NC}] PM2 processes terminated."
 
-            echo -e "\n${CYAN}➔${NC} Deleting panel files ($PANEL_DIR)..."
+            echo -e "\n${CYAN}➔${NC} Removing panel files ($PANEL_DIR)..."
             rm -rf "$PANEL_DIR"
-            echo -e " [${GREEN}✓${NC}] Files removed."
+            echo -e " [${GREEN}✓${NC}] Panel files completely removed."
             echo -e "\n ${GREEN}${BOLD}★ System Purge Complete! ★${NC}"
             ;;
         [Nn]*)
-            echo -e "\n ${GREEN}Operation cancelled cleanly.${NC}"
+            echo -e "\n ${GREEN}Operation cancelled.${NC}"
             ;;
         *)
-            echo -e "\n ${RED}Invalid response. Operation aborted.${NC}"
+            echo -e "\n ${RED}Invalid entry. Aborting operation.${NC}"
             ;;
     esac
     echo -ne "\n ${DIM}Press [Enter] to return...${NC}"
@@ -527,7 +562,7 @@ uninstall_panel() {
 }
 
 # ---------------------------------------------------------
-# Main Execution Loop
+# Execution Flow
 # ---------------------------------------------------------
 show_loading_screens
 
@@ -541,16 +576,17 @@ while true; do
         2) update_manual ;;
         3) panel_system_menu ;;
         4) cloudflare_zone ;;
+        5) add_admin_user ;;
         A|a) run_setup_1 ;;
         B|b) run_setup_2 ;;
         C|c) uninstall_panel ;;
         0)
-            echo -e "\n ${GREEN}System shut down. Goodbye!${NC}\n"
+            echo -e "\n ${GREEN}Exiting JTG Panel Terminal Interface. Goodbye!${NC}\n"
             tput cnorm 2>/dev/null
             exit 0
             ;;
         *)
-            echo -e "\n ${RED}Unrecognized command. Please try again.${NC}"
+            echo -e "\n ${RED}Invalid option selected.${NC}"
             sleep 1
             ;;
     esac
