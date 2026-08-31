@@ -1,4 +1,4 @@
-# ⚡ JTG Panel V2 - Installer cmd
+# ⚡ JTG Panel - Installer cmd
 
 > **Credits:** by **Jishnu** | Cmd Edit by **MrZetrix**
 
@@ -6,7 +6,7 @@
 
 ## 🌟 Overview
 
-**JTG Panel V2** is an ultra-optimized command-line interface and deployment manager designed to automate the full setup, repair, and tunneling of your JTP web panel. Optimized specifically for **Ubuntu, Debian, and Docker** environments.
+**JTG Panel** is an ultra-optimized command-line interface and deployment manager designed to automate the full setup, repair, and tunneling of your JTP web panel. Optimized specifically for **Ubuntu, Debian, and Docker** environments.
 
 ---
 
